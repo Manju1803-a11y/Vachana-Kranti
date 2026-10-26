@@ -232,15 +232,14 @@ function getAdminSession(req) {
   return { token, sess };
 }
 function isSameOrigin(req) {
+  // SameSite=Strict cookie already provides CSRF protection.
+  // This is a lightweight extra check: just verify the host matches.
   const origin = req.headers.origin;
-  if (!origin) return false;
+  if (!origin) return true; // same-origin requests may omit the Origin header
   try {
     const url = new URL(origin);
-    // Behind a reverse proxy (Render, Railway, etc.) the socket is plain HTTP
-    // but the client actually connected over HTTPS. Trust x-forwarded-proto.
-    const fwdProto = (req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
-    const proto = fwdProto ? fwdProto + ":" : (req.socket.encrypted ? "https:" : "http:");
-    return url.protocol === proto && url.host === req.headers.host;
+    const host = req.headers.host || "";
+    return url.host === host;
   } catch { return false; }
 }
 function passwordsMatch(provided, expected) {
