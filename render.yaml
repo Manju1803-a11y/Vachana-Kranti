@@ -2,7 +2,7 @@ services:
   - type: web
     name: vachana-kranti
     runtime: node
-    buildCommand: echo "No build step needed"
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: ADMIN_EMAIL
@@ -12,4 +12,3 @@ services:
       - key: NODE_ENV
         value: production
     healthCheckPath: /api/auth/session
-
