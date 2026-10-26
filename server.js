@@ -232,14 +232,12 @@ function getAdminSession(req) {
   return { token, sess };
 }
 function isSameOrigin(req) {
-  // SameSite=Strict cookie already provides CSRF protection.
-  // This is a lightweight extra check: just verify the host matches.
   const origin = req.headers.origin;
-  if (!origin) return true; // same-origin requests may omit the Origin header
+  if (!origin) return false;
   try {
     const url = new URL(origin);
-    const host = req.headers.host || "";
-    return url.host === host;
+    const proto = req.socket.encrypted ? "https:" : "http:";
+    return url.protocol === proto && url.host === req.headers.host;
   } catch { return false; }
 }
 function passwordsMatch(provided, expected) {
@@ -247,15 +245,9 @@ function passwordsMatch(provided, expected) {
   const b = crypto.createHash("sha256").update(expected).digest();
   return crypto.timingSafeEqual(a, b);
 }
-function isSecureRequest(req) {
-  // Behind a reverse proxy (Render, Railway, etc.) the socket is plain HTTP
-  // but the client connected over HTTPS. Trust x-forwarded-proto.
-  const fwdProto = (req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
-  return fwdProto === "https" || req.socket.encrypted;
-}
 function clearAdminSession(res, req, token = "") {
   if (token) adminSessions.delete(token);
-  const secure = isSecureRequest(req) ? "; Secure" : "";
+  const secure = req.socket.encrypted ? "; Secure" : "";
   res.setHeader("Set-Cookie", `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`);
 }
 function slugify(text) {
@@ -351,7 +343,7 @@ async function handleRequest(req, res) {
     const token = crypto.randomBytes(32).toString("hex");
     const ttl = body.remember ? REMEMBERED_SESSION_LIFETIME : ADMIN_SESSION_LIFETIME;
     adminSessions.set(token, { expiresAt: Date.now() + ttl });
-    const secure = isSecureRequest(req) ? "; Secure" : "";
+    const secure = req.socket.encrypted ? "; Secure" : "";
     res.setHeader("Set-Cookie", `${ADMIN_SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(ttl/1000)}${secure}`);
     return sendJson(res, 200, { authenticated: true });
   }

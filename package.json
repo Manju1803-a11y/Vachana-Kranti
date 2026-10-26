@@ -7,6 +7,10 @@
     "start": "node server.js",
     "dev": "node --env-file=.env server.js"
   },
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "pg": "^8.23.1"
+  },
   "engines": {
     "node": ">=20"
   }
