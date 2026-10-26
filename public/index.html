@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#174c3a">
+    <title>Vachana Kranti — E-paper desk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body class="admin-body">
+    <aside class="sidebar">
+      <a class="sidebar-brand" href="/" aria-label="Vachana Kranti home">
+        <span class="brand-mark">VK</span>
+        <span><strong>ವಚನ ಕ್ರಾಂತಿ</strong><small>VACHANA KRANTI</small></span>
+      </a>
+      <label class="sidebar-search"><span>⌕</span><input id="menu-search" type="search" placeholder="Search menu..." aria-label="Search navigation"></label>
+      <nav class="side-navigation" aria-label="Management navigation">
+        <button class="nav-link active" type="button" data-view="dashboard"><span class="nav-icon">▦</span>Dashboard</button>
+        <p class="nav-group">EPAPER MANAGEMENT</p>
+        <button class="nav-link" type="button" data-view="publish"><span class="nav-icon">▧</span>Publish edition</button>
+        <button class="nav-link" type="button" data-view="manage"><span class="nav-icon">▤</span>Manage editions</button>
+        <p class="nav-group">EPAPER SETTINGS</p>
+        <button class="nav-link" type="button" data-view="categories"><span class="nav-icon">◈</span>Edition category</button>
+        <button class="nav-link" type="button" data-view="settings"><span class="nav-icon">⚙</span>E-paper settings</button>
+        <button class="nav-link" type="button" data-view="theme"><span class="nav-icon">◐</span>Theme setup</button>
+        <button class="nav-link" type="button" data-view="pages"><span class="nav-icon">▧</span>Page management</button>
+        <a class="nav-link external-nav" href="/" target="_blank" rel="noopener"><span class="nav-icon">◉</span>View e-paper site</a>
+      </nav>
+      <div class="sidebar-bottom"><span class="sidebar-status"></span> Local server <span class="version">v1.1</span></div>
+    </aside>
+
+    <div class="admin-shell">
+      <header class="admin-topbar">
+        <div class="breadcrumb"><span>VACHANA KRANTI</span><b>/</b><strong id="current-page-label">DASHBOARD</strong></div>
+        <div class="topbar-actions"><span class="server-indicator"><i></i> Server online</span><a class="visit-site" href="/" target="_blank" rel="noopener">OPEN SITE ↗</a><button class="admin-signout" id="admin-signout" type="button">SIGN OUT</button></div>
+      </header>
+
+      <main class="admin-main">
+        <section class="view-panel active" id="view-dashboard">
+          <div class="dashboard-welcome">
+            <div>
+              <p class="eyebrow">EDITORIAL OVERVIEW</p>
+              <h1>Good day, <em>Vachana Kranti.</em></h1>
+              <p>Here is what is happening with your digital editions.</p>
+              <button class="button button-primary welcome-action" type="button" data-go="publish">＋ Create an edition</button>
+            </div>
+            <div class="welcome-art" aria-hidden="true"><span>ವಚನ<br>ಕ್ರಾಂತಿ</span><b>VK</b></div>
+          </div>
+
+          <div class="stat-grid">
+            <article class="stat-card stat-blue"><span>Total editions</span><strong id="stat-editions">—</strong><small>All issues in your archive</small><div class="sparkline" aria-hidden="true">⌁⌁⌁⌁</div></article>
+            <article class="stat-card stat-rose"><span>Edition categories</span><strong id="stat-categories">—</strong><small>Organize your publications</small><div class="sparkline" aria-hidden="true">⌁⌁⌁⌁</div></article>
+            <article class="stat-card stat-teal"><span>This month’s readers</span><strong id="stat-this-month">—</strong><small>Edition page visits this month</small><div class="sparkline" aria-hidden="true">⌁⌁⌁⌁</div></article>
+            <article class="stat-card stat-orange"><span>Last month’s readers</span><strong id="stat-last-month">—</strong><small>Edition page visits last month</small><div class="sparkline" aria-hidden="true">⌁⌁⌁⌁</div></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="dashboard-card storage-card">
+              <div class="card-title"><div><p class="eyebrow">UPLOADS</p><h2>Storage status</h2></div><span class="card-icon">▤</span></div>
+              <div class="storage-content">
+                <div class="storage-ring" id="storage-ring"><div><strong id="storage-percent">0%</strong><span>used</span></div></div>
+                <div class="storage-legend">
+                  <p><i class="legend-used"></i><span>Used storage</span><b id="storage-used">0 B</b></p>
+                  <p><i class="legend-free"></i><span>Free storage</span><b id="storage-free">10 GB</b></p>
+                  <p class="storage-total">Total space <strong id="storage-total">10 GB</strong></p>
+                </div>
+              </div>
+            </section>
+            <section class="dashboard-card analytics-card">
+              <div class="card-title"><div><p class="eyebrow">AUDIENCE</p><h2>Reader analytics</h2></div><span class="card-icon">⌁</span></div>
+              <div id="analytics-chart" class="analytics-chart" aria-label="Reader visits over the last six months"></div>
+              <div class="chart-footnote"><span class="chart-legend"></span> Edition page visits <b id="analytics-total">0 total</b></div>
+            </section>
+            <section class="dashboard-card schedule-card">
+              <div class="card-title"><div><p class="eyebrow">UP NEXT</p><h2>Publication schedule</h2></div><button class="text-button" type="button" data-go="manage">Manage</button></div>
+              <div id="schedule-list" class="schedule-list"><div class="schedule-empty"><span>◷</span><strong>No editions scheduled</strong><small>Schedule an edition from the publish form.</small></div></div>
+            </section>
+            <section class="dashboard-card recent-card">
+              <div class="card-title"><div><p class="eyebrow">LATEST WORK</p><h2>Recent editions</h2></div><button class="text-button" type="button" data-go="manage">View all →</button></div>
+              <div class="recent-list" id="recent-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view-panel" id="view-publish">
+          <div class="page-heading"><div><p class="eyebrow">EPAPER MANAGEMENT / NEW EDITION</p><h1 id="publish-heading">Create new edition</h1><p>Set the edition details, add your pages, and publish or schedule it.</p></div><span class="heading-mark">01 / 03</span></div>
+          <form id="publish-form" class="publish-form">
+            <div class="publish-fields">
+              <div class="field-wide"><label class="field-label" for="issue-name">Edition name <span class="required">*</span></label><input id="issue-name" name="name" type="text" maxlength="120" placeholder="e.g. Vachana Kranti — Bengaluru Edition" required></div>
+              <div><label class="field-label" for="issue-alias">Alias (URL)</label><div class="input-prefix"><span>/paper/</span><input id="issue-alias" name="alias" type="text" maxlength="60" placeholder="optional-url-alias"></div><small class="field-hint">Optional. Use lowercase letters, numbers and hyphens.</small></div>
+              <div><label class="field-label" for="issue-date">Edition date <span class="required">*</span></label><input id="issue-date" name="date" type="date" required></div>
+              <div><label class="field-label" for="issue-meta-title">Meta title</label><input id="issue-meta-title" name="metaTitle" type="text" maxlength="160" placeholder="Search and browser title"></div>
+              <div class="field-wide"><label class="field-label" for="issue-meta-description">Meta description</label><textarea id="issue-meta-description" name="metaDescription" maxlength="500" rows="3" placeholder="A short description of this edition"></textarea></div>
+              <div><label class="field-label" for="issue-category">Category <span class="required">*</span></label><select id="issue-category" name="category" required></select></div>
+              <div><label class="field-label" for="issue-status">Status <span class="required">*</span></label><select id="issue-status" name="status" required><option value="public">Public — publish now</option><option value="draft">Draft — keep unpublished</option><option value="scheduled">Schedule for later</option></select></div>
+              <div><label class="field-label" for="issue-upload-type">Upload type <span class="required">*</span></label><select id="issue-upload-type" name="uploadType" required><option value="mixed">PDF + images</option><option value="pdf">PDF only</option><option value="images">Images only</option></select></div>
+              <div id="schedule-field" hidden><label class="field-label" for="issue-schedule">Publish at <span class="required">*</span></label><input id="issue-schedule" name="scheduledAt" type="datetime-local"></div>
+              <p class="form-error field-wide" id="form-error" role="alert" hidden></p>
+            </div>
+            <div class="upload-column">
+              <div class="upload-title"><span class="field-label">Edition pages <span class="required">*</span></span><span class="file-count" id="file-count">0 files</span></div>
+              <label class="drop-zone" for="issue-files" id="drop-zone">
+                <input id="issue-files" name="files" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,application/pdf,image/jpeg,image/png,image/webp,image/gif" multiple>
+                <span class="upload-illustration" aria-hidden="true">▧<b>↑</b></span>
+                <strong>Drop, upload or paste pages</strong>
+                <span class="upload-hint">Choose files or paste an image from your clipboard</span>
+                <span class="upload-limit">PDF, JPG, PNG, WEBP or GIF · up to 30 files · 50 MB each</span>
+                <span class="button browse-button">＋ Browse files</span>
+              </label>
+              <p class="edit-file-note" id="edit-file-note" hidden>Existing pages stay as they are unless you select replacement pages.</p>
+              <ul class="selected-files" id="selected-files" aria-live="polite"></ul>
+              <div class="upload-tip"><span>i</span><p>For the best reader experience, upload pages in the order you want them displayed.</p></div>
+              <button class="button button-primary deploy-button" id="deploy-button" type="submit"><span>Review &amp; deploy</span><span aria-hidden="true">↗</span></button>
+              <button class="button reset-button" id="reset-button" type="button">Reset form</button>
+            </div>
+          </form>
+          <div class="publish-result" id="publish-result" hidden></div>
+        </section>
+
+        <section class="view-panel" id="view-manage">
+          <div class="page-heading"><div><p class="eyebrow">EPAPER MANAGEMENT / ARCHIVE</p><h1>Manage editions</h1><p>Search, edit, preview, share, and manage scheduled publications.</p></div><button class="button button-primary heading-button" type="button" data-go="publish">＋ New edition</button></div>
+          <div class="management-toolbar">
+            <label class="table-search"><span>⌕</span><input id="manage-search" type="search" placeholder="Search by edition name, date or category..." aria-label="Search editions"></label>
+            <div class="toolbar-filters"><select id="status-filter" aria-label="Filter by status"><option value="">All statuses</option><option value="public">Public</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option></select><select id="category-filter" aria-label="Filter by category"><option value="">All categories</option></select><button class="refresh-button" id="refresh-button" type="button" aria-label="Refresh editions">↻</button></div>
+          </div>
+          <div class="bulk-toolbar" id="bulk-toolbar" hidden><span id="selected-count">0 selected</span><button type="button" data-bulk-status="public">Publish selected</button><button type="button" data-bulk-status="draft">Move to draft</button><button type="button" id="bulk-delete">Delete selected</button><button type="button" id="clear-selection">Clear selection</button></div>
+          <div class="table-wrap"><table class="edition-table"><thead><tr><th><input id="select-all" type="checkbox" aria-label="Select all editions"></th><th>NO.</th><th>EDITION</th><th>DATE</th><th>STATUS</th><th>SCHEDULE</th><th>PAGES</th><th>ACTIONS</th></tr></thead><tbody id="manage-rows"><tr><td colspan="8" class="table-empty">Loading editions…</td></tr></tbody></table></div>
+          <div class="table-footer"><span id="table-summary">Showing 0 editions</span><span>Stored on this local server</span></div>
+        </section>
+
+        <section class="view-panel" id="view-categories">
+          <div class="page-heading"><div><p class="eyebrow">EPAPER SETTINGS / ORGANIZATION</p><h1>Edition categories</h1><p>Create categories to organize your newspaper editions.</p></div></div>
+          <div class="category-layout">
+            <form id="category-form" class="dashboard-card category-create"><p class="eyebrow">ADD CATEGORY</p><h2 id="category-form-title">Create a category</h2><label class="field-label" for="category-name">Category name</label><input id="category-name" type="text" maxlength="50" placeholder="e.g. Weekend Edition" required><div class="category-form-actions"><button class="button button-primary" id="category-save" type="submit">Save category</button><button class="button reset-button" id="category-cancel" type="button" hidden>Cancel</button></div><p class="form-error" id="category-error" role="alert" hidden></p><p class="privacy-note">Categories can be assigned to editions from the publish form.</p></form>
+            <section class="dashboard-card category-list-card"><div class="card-title"><div><p class="eyebrow">YOUR COLLECTIONS</p><h2>Category list</h2></div><span class="archive-count" id="category-total">0</span></div><div class="category-table-wrap"><table class="category-table"><thead><tr><th>NO.</th><th>EDITION NAME</th><th>STATUS</th><th>MAKE DEFAULT</th><th>EDIT</th><th>REMOVE</th></tr></thead><tbody id="category-list"></tbody></table></div></section>
+          </div>
+        </section>
+
+        <section class="view-panel" id="view-settings">
+          <div class="page-heading"><div><p class="eyebrow">EPAPER SETTINGS / CONFIGURATION</p><h1>Site settings</h1><p>Configure how your Vachana Kranti site is presented and connected.</p></div></div>
+          <div class="settings-layout">
+            <nav class="settings-menu dashboard-card" aria-label="Settings sections">
+              <p class="eyebrow">SETTINGS</p>
+              <button class="settings-tab active" type="button" data-settings-section="basic">Basic setup</button>
+              <button class="settings-tab" type="button" data-settings-section="seo">SEO setup</button>
+              <button class="settings-tab" type="button" data-settings-section="social">Social pages</button>
+              <button class="settings-tab" type="button" data-settings-section="push">Push notification</button>
+              <button class="settings-tab" type="button" data-settings-section="watermark">Watermark setup</button>
+              <button class="settings-tab" type="button" data-settings-section="integrations">Analytics &amp; verification</button>
+              <button class="settings-tab" type="button" data-settings-section="pwa">Progressive web app</button>
+              <button class="settings-tab" type="button" data-settings-section="comments">Comment setup</button>
+            </nav>
+            <form id="settings-form" class="dashboard-card settings-form" novalidate>
+              <div class="settings-panel active" data-settings-panel="basic">
+                <h2>Basic setup</h2><p class="settings-description">Your publication identity and regional display preferences.</p>
+                <div class="settings-fields">
+                  <label class="field-wide">Website name<input name="siteName" maxlength="120"></label>
+                  <label>Country<input name="country" maxlength="80"></label>
+                  <label>Timezone<select name="timezone"><option>Asia/Kolkata</option><option>UTC</option><option>Asia/Dubai</option><option>Europe/London</option><option>America/New_York</option></select></label>
+                  <label>Language<select name="language"><option value="en">English</option><option value="kn">Kannada</option><option value="hi">Hindi</option></select></label>
+                  <label>Credit / publisher<input name="credit" maxlength="120"></label>
+                  <label>Favicon URL<input name="faviconUrl" type="url" placeholder="https://example.com/favicon.png"></label>
+                  <label>Newspaper logo URL<input name="logoUrl" type="url" placeholder="https://example.com/logo.png"></label>
+                </div>
+              </div>
+              <div class="settings-panel" data-settings-panel="seo">
+                <h2>SEO setup</h2><p class="settings-description">Default search and sharing information for your e-paper site.</p>
+                <div class="settings-fields">
+                  <label class="field-wide">Default page title<input name="title" maxlength="160"></label>
+                  <label class="field-wide">Default description<textarea name="description" rows="3" maxlength="500"></textarea></label>
+                  <label class="field-wide">Keywords<input name="keywords" maxlength="500" placeholder="newspaper, e-paper, Vachana Kranti"></label>
+                  <label class="field-wide">Canonical site URL<input name="canonicalUrl" type="url" placeholder="https://example.com"></label>
+                  <label>Search indexing<select name="robots"><option value="index,follow">Allow indexing</option><option value="noindex,nofollow">Do not index</option></select></label>
+                </div>
+              </div>
+              <div class="settings-panel" data-settings-panel="social">
+                <h2>Social pages</h2><p class="settings-description">Add links to your official social accounts. Leave a field blank to hide it.</p>
+                <div class="settings-fields">
+                  <label>Facebook<input name="facebook" type="url" placeholder="https://facebook.com/"></label>
+                  <label>Instagram<input name="instagram" type="url" placeholder="https://instagram.com/"></label>
+                  <label>YouTube<input name="youtube" type="url" placeholder="https://youtube.com/"></label>
+                  <label>WhatsApp channel<input name="whatsapp" type="url" placeholder="https://whatsapp.com/channel/"></label>
+                  <label>X / Twitter<input name="x" type="url" placeholder="https://x.com/"></label>
+                </div>
+              </div>
+              <div class="settings-panel" data-settings-panel="push">
+                <h2>Push notifications</h2><p class="settings-description">Configure browser push settings. A push service and valid VAPID keys are required to send notifications.</p>
+                <div class="settings-fields">
+                  <label class="toggle-field field-wide"><input name="enabled" type="checkbox"><span>Enable push notification setup</span></label>
+                  <label class="field-wide">VAPID public key<input name="publicKey" maxlength="500" placeholder="Public application server key"></label>
+                  <label class="field-wide">Contact / VAPID subject<input name="vapidSubject" maxlength="200" placeholder="mailto:editor@example.com"></label>
+                </div>
+              </div>
+              <div class="settings-panel" data-settings-panel="watermark">
+                <h2>Watermark setup</h2><p class="settings-description">Choose a watermark style for the public edition reader.</p>
+                <div class="settings-fields">
+                  <label class="toggle-field field-wide"><input name="enabled" type="checkbox"><span>Show watermark on edition pages</span></label>
+                  <label>Watermark text<input name="text" maxlength="80"></label>
+                  <label>Opacity (0–100)<input name="opacity" type="number" min="0" max="100"></label>
+                  <label>Position<select name="position"><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option><option value="top-right">Top right</option><option value="top-left">Top left</option></select></label>
+                </div>
+              </div>
+              <div class="settings-panel" data-settings-panel="integrations">
+                <h2>Analytics &amp; verification</h2><p class="settings-description">Save your provider IDs for site integration. These IDs are configuration only until the matching provider setup is completed.</p>
+                <div class="settings-fields">
+                  <label>Google Analytics measurement ID<input name="googleAnalyticsId" maxlength="80" placeholder="G-XXXXXXXXXX"></label>
+                  <label>Google site verification<input name="googleSiteVerification" maxlength="200"></label>
+                  <label>reCAPTCHA site key<input name="recaptchaSiteKey" maxlength="300"></label>
+                  <label>reCAPTCHA secret key<input name="recaptchaSecretKey" type="password" maxlength="300"></label>
+                  <label>Facebook Pixel ID<input name="facebookPixelId" maxlength="80"></label>
+                  <label>Heatmap site ID<input name="heatmapSiteId" maxlength="100"></label>
+                </div>
+              </div>
+              <div class="settings-panel" data-settings-panel="pwa">
+                <h2>Progressive web app</h2><p class="settings-description">Set the install name and browser colors for your site.</p>
+                <div class="settings-fields">
+                  <label class="toggle-field field-wide"><input name="enabled" type="checkbox"><span>Enable installable app metadata</span></label>
+                  <label>Application name<input name="appName" maxlength="80"></label>
+                  <label>Short name<input name="shortName" maxlength="24"></label>
+                  <label>Theme color<input name="themeColor" type="color"></label>
+                  <label>Background color<input name="backgroundColor" type="color"></label>
+                </div>
+              </div>
+              <div class="settings-panel" data-settings-panel="comments">
+                <h2>Comment setup</h2><p class="settings-description">Control whether reader comments are enabled and require moderation.</p>
+                <div class="settings-fields">
+                  <label class="toggle-field field-wide"><input name="enabled" type="checkbox"><span>Enable reader comments</span></label>
+                  <label class="toggle-field field-wide"><input name="requireApproval" type="checkbox"><span>Require approval before displaying comments</span></label>
+                  <label>Comment provider<select name="provider"><option value="local">Local comments (setup required)</option><option value="disqus">Disqus (integration required)</option></select></label>
+                </div>
+              </div>
+              <p class="form-error field-wide" id="settings-error" role="alert" hidden></p>
+              <div class="settings-actions"><button class="button button-primary" type="submit">Save settings</button><span id="settings-saved"></span></div>
+            </form>
+          </div>
+        </section>
+
+        <section class="view-panel" id="view-theme">
+          <div class="page-heading"><div><p class="eyebrow">EPAPER SETTINGS / APPEARANCE</p><h1>Theme setup</h1><p>Customize the public reader navigation, edition appearance, and extra CSS.</p></div></div>
+          <div class="theme-layout">
+            <section class="dashboard-card theme-menu"><p class="eyebrow">SETTINGS</p><button class="settings-tab active" type="button" data-theme-section="navbar">Navbar setup</button><button class="settings-tab" type="button" data-theme-section="appearance">Edition appearance</button><button class="settings-tab" type="button" data-theme-section="additionalCss">Additional CSS</button></section>
+            <form class="dashboard-card theme-form" id="theme-form" novalidate>
+              <div class="theme-panel active" data-theme-panel="navbar"><h2>Navbar setup</h2><p class="settings-description">Customize the reader's publication header.</p><div class="settings-fields"><label>Website name<input name="title" maxlength="100"></label><label>Header subtitle<input name="tagline" maxlength="100"></label><label class="toggle-field field-wide"><input name="sticky" type="checkbox"><span>Keep the reader navigation visible while scrolling</span></label></div></div>
+              <div class="theme-panel" data-theme-panel="appearance"><h2>Edition appearance</h2><p class="settings-description">Set colors and page width for the public e-paper reader.</p><div class="settings-fields"><label>Primary color<input name="primaryColor" type="color"></label><label>Accent color<input name="accentColor" type="color"></label><label>Reader background<input name="backgroundColor" type="color"></label><label>Maximum page width (px)<input name="pageWidth" type="number" min="600" max="1400"></label><label>Interface font<select name="font"><option>DM Sans</option><option>Arial</option><option>Georgia</option><option>system-ui</option></select></label><label class="toggle-field"><input name="showCategory" type="checkbox"><span>Show edition category</span></label></div></div>
+              <div class="theme-panel" data-theme-panel="additionalCss"><h2>Additional CSS</h2><p class="settings-description">Optional CSS for advanced local customization. Keep styles limited to the reader.</p><label class="css-label" for="additional-css">Custom reader CSS</label><textarea id="additional-css" name="additionalCss" rows="16" maxlength="12000" spellcheck="false" placeholder=".edition-masthead { border-radius: 8px; }"></textarea></div>
+              <p class="form-error field-wide" id="theme-error" role="alert" hidden></p><div class="settings-actions"><button class="button button-primary" type="submit">Save theme</button><button class="button reset-button" type="button" id="preview-theme">Preview reader</button></div>
+            </form>
+          </div>
+        </section>
+
+        <section class="view-panel" id="view-pages">
+          <div class="page-heading"><div><p class="eyebrow">EPAPER SETTINGS / PAGE MANAGEMENT</p><h1>Information pages</h1><p>Create and manage public pages such as Privacy Policy, Disclaimer, and Terms.</p></div><button class="button button-primary heading-button" type="button" id="new-page-button">＋ Add new page</button></div>
+          <div class="page-management-layout">
+            <section class="dashboard-card info-pages-card"><div class="card-title"><div><p class="eyebrow">LIST OF PAGES</p><h2>Public site pages</h2></div><span class="archive-count" id="page-total">0</span></div><div class="table-wrap"><table class="edition-table"><thead><tr><th>NO.</th><th>PAGE NAME</th><th>PAGE URL</th><th>STATUS</th><th>COPY URL</th><th>EDIT</th><th>REMOVE</th></tr></thead><tbody id="page-rows"></tbody></table></div></section>
+            <form class="dashboard-card page-editor" id="page-form"><p class="eyebrow">PAGE EDITOR</p><h2 id="page-form-title">Add information page</h2><label class="field-label" for="page-title">Page name <span class="required">*</span></label><input id="page-title" name="title" maxlength="120" required placeholder="e.g. Privacy Policy"><label class="field-label" for="page-slug">Page URL</label><div class="input-prefix"><span>/page/</span><input id="page-slug" name="slug" maxlength="60" placeholder="privacy-policy"></div><label class="field-label" for="page-status">Status</label><select id="page-status" name="status"><option value="public">Public</option><option value="draft">Draft</option></select><label class="field-label" for="page-content">Page content</label><textarea id="page-content" name="content" rows="10" placeholder="Write your page content here..." required></textarea><p class="form-error" id="page-error" role="alert" hidden></p><div class="settings-actions"><button class="button button-primary" type="submit" id="page-save">Save page</button><button class="button reset-button" type="button" id="page-cancel" hidden>Cancel</button></div></form>
+          </div>
+        </section>
+        <footer class="admin-footer">VACHANA KRANTI <span>·</span> Independent stories, shared widely.</footer>
+      </main>
+    </div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

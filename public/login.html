@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#e9f2ff">
+    <title>Sign in — Vachana Kranti</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/login.css">
+    <script src="/login.js" defer></script>
+  </head>
+  <body class="login-body">
+    <main class="login-stage">
+      <div class="login-window" aria-hidden="true"></div>
+      <header class="login-brand">
+        <a href="/page/privacy-policy" aria-label="Vachana Kranti">
+          <span class="login-brand-mark">ವಕ</span>
+          <span><strong>ವಚನ ಕ್ರಾಂತಿ</strong><small>VACHANA KRANTI</small></span>
+        </a>
+        <span class="secure-label"><i></i> EDITOR SIGN IN</span>
+      </header>
+
+      <section class="login-card" aria-labelledby="login-title">
+        <div class="login-card-heading">
+          <span class="login-card-mark" aria-hidden="true">VK</span>
+          <p class="login-eyebrow">VACHANA KRANTI · EPAPER DESK</p>
+          <h1 id="login-title">Welcome back</h1>
+          <p>Sign in to manage your digital editions.</p>
+        </div>
+        <form id="login-form">
+          <label for="login-email">Email</label>
+          <input id="login-email" name="email" type="email" autocomplete="username" maxlength="254" placeholder="you@example.com" required>
+          <div class="password-label">
+            <label for="login-password">Password</label>
+          </div>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" maxlength="1024" placeholder="Enter your password" required>
+          <label class="remember-row"><input name="remember" type="checkbox"><span>Remember me on this device</span></label>
+          <p id="login-error" class="login-error" role="alert" hidden></p>
+          <button id="login-submit" class="login-submit" type="submit">Sign in <span aria-hidden="true">→</span></button>
+        </form>
+        <div class="login-divider"><span>SECURE LOCAL ACCESS</span></div>
+        <p class="login-help">Your sign-in protects the publishing dashboard and edition management tools.</p>
+      </section>
+
+      <footer class="login-footer">
+        <span>© Vachana Kranti</span>
+        <a href="/page/privacy-policy">Privacy &amp; terms</a>
+        <span class="login-footer-location">Local publishing desk</span>
+      </footer>
+    </main>
+    <div class="login-signature" aria-hidden="true">ವಚನ ಕ್ರಾಂತಿ</div>
+  </body>
+</html>

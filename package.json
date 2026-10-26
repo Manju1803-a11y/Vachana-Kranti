@@ -1,0 +1,13 @@
+{
+  "name": "vachana-kranti-epaper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local e-paper publishing and archive system for Vachana Kranti",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --env-file=.env server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#174c3a">
+    <title>Vachana Kranti — E-paper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body class="paper-body">
+    <header class="topbar paper-topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark">VK</span>
+        <span><strong>Vachana Kranti</strong><small>Digital edition</small></span>
+      </a>
+      <div class="reader-actions">
+        <a class="button button-light" href="/">← All editions</a>
+        <button class="button button-outline" id="print-button" type="button">Print edition</button>
+      </div>
+    </header>
+    <main class="reader">
+      <div class="reader-status" id="reader-status">Opening edition…</div>
+      <section id="paper-content" hidden>
+        <header class="edition-masthead">
+          <p class="eyebrow">VACHANA KRANTI · DIGITAL EDITION</p>
+          <h1 id="paper-title"></h1>
+          <div class="edition-meta"><span id="paper-date"></span><span class="meta-separator">·</span><span id="paper-category"></span><span class="meta-separator">·</span><span id="page-count"></span></div>
+        </header>
+        <div class="reader-toolbar">
+          <div class="toolbar-label"><span class="live-dot"></span> READER VIEW</div>
+          <a class="text-action" href="#page-stack">Jump to pages ↓</a>
+        </div>
+        <div class="page-stack" id="page-stack"></div>
+        <nav class="edition-navigation" id="edition-navigation" aria-label="Edition navigation"></nav>
+        <footer class="reader-footer"><span id="reader-credit">Vachana Kranti</span><nav id="info-pages" aria-label="Information pages"></nav></footer>
+      </section>
+    </main>
+    <div class="image-viewer" id="image-viewer" role="dialog" aria-modal="true" aria-label="Expanded newspaper page" hidden>
+      <button class="viewer-close" id="viewer-close" type="button" aria-label="Close image viewer">×</button>
+      <img id="viewer-image" alt="">
+      <p id="viewer-caption"></p>
+    </div>
+    <script src="/paper.js" defer></script>
+  </body>
+</html>

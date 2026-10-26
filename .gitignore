@@ -1,0 +1,19 @@
+# Environment variables - NEVER commit credentials
+.env
+
+# Node
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime temp files
+*.tmp
+
+# Uploaded issue data (runtime, not source code)
+data/issues/

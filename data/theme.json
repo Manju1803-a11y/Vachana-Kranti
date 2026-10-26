@@ -1,0 +1,16 @@
+{
+  "navbar": {
+    "title": "Vachana Kranti",
+    "tagline": "Digital edition",
+    "sticky": true
+  },
+  "appearance": {
+    "primaryColor": "#174c3a",
+    "accentColor": "#d8ac5b",
+    "backgroundColor": "#f2f3ef",
+    "pageWidth": "900",
+    "font": "DM Sans",
+    "showCategory": true
+  },
+  "additionalCss": ""
+}

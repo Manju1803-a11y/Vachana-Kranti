@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "privacy-policy",
+    "title": "Privacy Policy",
+    "content": "Privacy information for Vachana Kranti readers.",
+    "status": "public",
+    "createdAt": "2026-10-26T08:23:35.034Z",
+    "updatedAt": "2026-10-26T08:23:35.035Z"
+  },
+  {
+    "slug": "disclaimer",
+    "title": "Disclaimer",
+    "content": "Information in Vachana Kranti editions is provided for general reading.",
+    "status": "public",
+    "createdAt": "2026-10-26T08:23:35.035Z",
+    "updatedAt": "2026-10-26T08:23:35.035Z"
+  },
+  {
+    "slug": "terms-and-conditions",
+    "title": "Terms and Conditions",
+    "content": "Terms for using the Vachana Kranti e-paper site.",
+    "status": "public",
+    "createdAt": "2026-10-26T08:23:35.035Z",
+    "updatedAt": "2026-10-26T08:23:35.035Z"
+  }
+]

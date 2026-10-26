@@ -1,0 +1,57 @@
+{
+  "basic": {
+    "siteName": "Vachana Kranti",
+    "country": "India",
+    "timezone": "Asia/Kolkata",
+    "language": "en",
+    "credit": "Vachana Kranti",
+    "faviconUrl": "",
+    "logoUrl": ""
+  },
+  "seo": {
+    "title": "Vachana Kranti — E-paper",
+    "description": "Read the latest Vachana Kranti digital editions.",
+    "keywords": "",
+    "canonicalUrl": "",
+    "robots": "index,follow"
+  },
+  "social": {
+    "facebook": "",
+    "instagram": "",
+    "youtube": "",
+    "whatsapp": "",
+    "x": ""
+  },
+  "push": {
+    "enabled": false,
+    "publicKey": "",
+    "vapidSubject": ""
+  },
+  "watermark": {
+    "enabled": false,
+    "text": "Vachana Kranti",
+    "opacity": 35,
+    "position": "bottom-right"
+  },
+  "integrations": {
+    "googleAnalyticsId": "",
+    "googleSiteVerification": "",
+    "recaptchaSiteKey": "",
+    "recaptchaSecretKey": "",
+    "facebookPixelId": "",
+    "heatmapSiteId": ""
+  },
+  "pwa": {
+    "enabled": true,
+    "appName": "Vachana Kranti",
+    "shortName": "Vachana",
+    "themeColor": "#174c3a",
+    "backgroundColor": "#f4f6f2"
+  },
+  "comments": {
+    "enabled": false,
+    "requireApproval": true,
+    "provider": "local"
+  },
+  "defaultCategory": "Main Edition"
+}
