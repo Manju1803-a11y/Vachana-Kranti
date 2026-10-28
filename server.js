@@ -473,9 +473,11 @@ function isSameOrigin(req) {
   if (!origin) return true; // Direct same-origin browser navigations
   try {
     const url = new URL(origin);
-    const host = req.headers["x-forwarded-host"] || req.headers.host;
-    if (!host) return true;
-    return url.host.toLowerCase() === host.toLowerCase();
+    const rawHost = req.headers["x-forwarded-host"] || req.headers.host;
+    if (!rawHost) return true;
+    const clientHost = rawHost.split(",")[0].trim().split(":")[0].toLowerCase();
+    const originHost = url.hostname.toLowerCase();
+    return originHost === clientHost || originHost === "localhost" || originHost === "127.0.0.1";
   } catch {
     return true;
   }
@@ -513,16 +515,20 @@ function getBaseUrl(req) {
 }
 
 function publicIssue(issue, baseUrl) {
+  const title = issue.name || issue.title || "Untitled Edition";
+  const alias = issue.alias || "";
+  const readerUrl = `${baseUrl}/paper/${alias || issue.id}`;
   return {
     id: issue.id,
-    title: issue.title,
+    name: title,
+    title: title,
     date: issue.date,
-    category: issue.category,
-    status: issue.status,
-    scheduledAt: issue.scheduledAt,
-    publishedAt: issue.publishedAt,
-    alias: issue.alias,
-    featured: issue.featured,
+    category: issue.category || "Main Edition",
+    status: issue.status || "public",
+    scheduledAt: issue.scheduledAt || null,
+    publishedAt: issue.publishedAt || null,
+    alias,
+    featured: Boolean(issue.featured),
     totalFiles: issue.files ? issue.files.length : 0,
     files: (issue.files || []).map(f => ({
       name: f.name,
@@ -531,7 +537,9 @@ function publicIssue(issue, baseUrl) {
       size: f.size,
       url: `${baseUrl}/media/${issue.id}/${f.path}`
     })),
-    readerUrl: `${baseUrl}/paper/${issue.alias || issue.id}`
+    areas: issue.areas || [],
+    url: readerUrl,
+    readerUrl
   };
 }
 
@@ -645,6 +653,31 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, await getDashboardStats());
   }
 
+  // ----- Image Upload API -----
+  if (req.method === "POST" && url.pathname === "/api/upload") {
+    try {
+      const b = await readJson(req);
+      if (!b.data || typeof b.data !== "string") return sendJson(res, 400, { error: "No image data provided." });
+      const rawComma = b.data.indexOf(",");
+      const b64 = rawComma > -1 ? b.data.slice(rawComma + 1) : b.data;
+      const buf = Buffer.from(b64, "base64");
+      if (buf.length > 5 * 1024 * 1024) return sendJson(res, 400, { error: "Image exceeds 5 MB limit." });
+
+      const ext = path.extname(b.name || "").toLowerCase() || ".png";
+      const allowed = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".ico", ".gif"];
+      if (!allowed.includes(ext)) return sendJson(res, 400, { error: `Unsupported image format (${ext}). Allowed: ${allowed.join(", ")}` });
+
+      const uploadsDir = path.join(PUBLIC_DIR, "uploads");
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      const filename = `up-${Date.now()}-${crypto.randomBytes(4).toString("hex")}${ext}`;
+      fs.writeFileSync(path.join(uploadsDir, filename), buf);
+
+      return sendJson(res, 200, { url: `/uploads/${filename}`, filename, size: buf.length });
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message || "Failed to upload image." });
+    }
+  }
+
   // ----- App Data (Settings, Theme, Pages, Categories) -----
   if (url.pathname === "/api/settings") {
     if (req.method === "GET") return sendJson(res, 200, { settings: await getSettings() });
@@ -669,7 +702,11 @@ async function handleRequest(req, res) {
   }
 
   if (url.pathname === "/api/categories") {
-    if (req.method === "GET") return sendJson(res, 200, { categories: await getCategories() });
+    if (req.method === "GET") {
+      const categories = await getCategories();
+      const defaultCategory = (await getAppData("defaultCategory")) || categories[0] || "Main Edition";
+      return sendJson(res, 200, { categories, defaultCategory });
+    }
     if (req.method === "POST") {
       const b = await readJson(req);
       const name = typeof b.name === "string" ? b.name.trim() : "";
@@ -681,13 +718,50 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (url.pathname === "/api/categories/default" && req.method === "POST") {
+    const b = await readJson(req);
+    const name = typeof b.name === "string" ? b.name.trim() : "";
+    if (name) {
+      await setAppData("defaultCategory", name);
+      return sendJson(res, 200, { defaultCategory: name });
+    }
+    return sendJson(res, 400, { error: "Category name is required." });
+  }
+
   const catMatch = url.pathname.match(/^\/api\/categories\/(.+)$/);
-  if (req.method === "DELETE" && catMatch) {
-    const name = decodeURIComponent(catMatch[1]);
-    let cats = await getCategories();
-    cats = cats.filter(c => c !== name);
-    await setAppData("categories", cats);
-    return sendJson(res, 200, { categories: cats });
+  if (catMatch && url.pathname !== "/api/categories/default") {
+    const oldName = decodeURIComponent(catMatch[1]);
+    if (req.method === "PUT") {
+      const b = await readJson(req);
+      const newName = typeof b.name === "string" ? b.name.trim() : "";
+      if (!newName) return sendJson(res, 400, { error: "New category name is required." });
+      let cats = await getCategories();
+      const idx = cats.indexOf(oldName);
+      if (idx !== -1) {
+        cats[idx] = newName;
+      } else if (!cats.includes(newName)) {
+        cats.push(newName);
+      }
+      await setAppData("categories", cats);
+      const defCat = await getAppData("defaultCategory");
+      if (defCat === oldName) await setAppData("defaultCategory", newName);
+
+      // Update any issues having the old category name
+      const issues = await dbListIssues();
+      for (const issue of issues) {
+        if (issue.category === oldName) {
+          issue.category = newName;
+          await dbSaveIssue(issue);
+        }
+      }
+      return sendJson(res, 200, { categories: cats });
+    }
+    if (req.method === "DELETE") {
+      let cats = await getCategories();
+      cats = cats.filter(c => c !== oldName);
+      await setAppData("categories", cats);
+      return sendJson(res, 200, { categories: cats });
+    }
   }
 
   if (url.pathname === "/api/pages") {
@@ -734,13 +808,18 @@ async function handleRequest(req, res) {
     if (req.method === "POST") {
       const body = await readJson(req);
       const id = crypto.randomBytes(6).toString("hex");
-      const title = typeof body.title === "string" ? body.title.trim() : "Untitled Edition";
+      const title = typeof body.name === "string" && body.name.trim()
+        ? body.name.trim()
+        : typeof body.title === "string" && body.title.trim()
+        ? body.title.trim()
+        : "Untitled Edition";
       const date = typeof body.date === "string" ? body.date : new Date().toISOString().slice(0, 10);
       const decoded = decodeFiles(body.files);
 
       const savedFiles = await dbSaveFiles(id, decoded);
       const issue = {
         id,
+        name: title,
         title,
         date,
         category: body.category || "Main Edition",
@@ -752,6 +831,7 @@ async function handleRequest(req, res) {
         views: 0,
         viewsByMonth: {},
         files: savedFiles,
+        areas: Array.isArray(body.areas) ? body.areas : [],
         createdAt: new Date().toISOString()
       };
       await dbSaveIssue(issue);
@@ -770,13 +850,23 @@ async function handleRequest(req, res) {
     }
     if (req.method === "PUT") {
       const body = await readJson(req);
-      if (body.title) issue.title = body.title.trim();
+      if (body.name || body.title) {
+        const val = (body.name || body.title).trim();
+        issue.name = val;
+        issue.title = val;
+      }
       if (body.date) issue.date = body.date;
       if (body.category) issue.category = body.category;
-      if (body.status) issue.status = body.status;
+      if (body.status) {
+        issue.status = body.status;
+        if (body.status === "public" && !issue.publishedAt) {
+          issue.publishedAt = new Date().toISOString();
+        }
+      }
       if (body.alias !== undefined) issue.alias = body.alias ? slugify(body.alias) : "";
       if (body.featured !== undefined) issue.featured = Boolean(body.featured);
       if (body.scheduledAt !== undefined) issue.scheduledAt = body.scheduledAt;
+      if (body.areas !== undefined) issue.areas = body.areas;
 
       if (body.files && Array.isArray(body.files) && body.files.length > 0) {
         const decoded = decodeFiles(body.files);
@@ -810,7 +900,49 @@ async function handleRequest(req, res) {
     return serveFile(res, path.join(PUBLIC_DIR, "info-page.html"), "text/html; charset=utf-8");
   }
 
-  // Reader app page
+  // ----- Public Reader API endpoint -----
+  const readerApiMatch = url.pathname.match(/^\/api\/reader\/([a-z0-9-]+)$/);
+  if (req.method === "GET" && readerApiMatch) {
+    const key = readerApiMatch[1];
+    let issue = null;
+    const allPublic = (await dbListIssues()).filter(i => i.status === "public");
+    if (key === "latest" || key === "current") {
+      issue = allPublic[0] || null;
+    } else {
+      issue = await dbFindIssue(key);
+    }
+
+    if (!issue || (issue.status && issue.status !== "public")) {
+      return sendJson(res, 404, { error: "Edition not found or unpublished." });
+    }
+
+    const idx = allPublic.findIndex(i => i.id === issue.id);
+    const newerIssue = idx > 0 ? { name: allPublic[idx - 1].name || allPublic[idx - 1].title, url: `/paper/${allPublic[idx - 1].alias || allPublic[idx - 1].id}` } : null;
+    const olderIssue = idx < allPublic.length - 1 && idx !== -1 ? { name: allPublic[idx + 1].name || allPublic[idx + 1].title, url: `/paper/${allPublic[idx + 1].alias || allPublic[idx + 1].id}` } : null;
+    const settings = await getSettings();
+    const theme = await getTheme();
+
+    return sendJson(res, 200, {
+      issue: publicIssue(issue, baseUrl),
+      newerIssue,
+      olderIssue,
+      settings,
+      theme
+    });
+  }
+
+  // Reader app page fallback
+  if (req.method === "GET" && (url.pathname === "/paper" || url.pathname === "/paper/" || url.pathname === "/site")) {
+    const allPublic = (await dbListIssues()).filter(i => i.status === "public");
+    const latest = allPublic[0];
+    if (latest) {
+      res.writeHead(302, { Location: `/paper/${latest.alias || latest.id}` });
+      return res.end();
+    }
+    return serveFile(res, path.join(PUBLIC_DIR, "paper.html"), "text/html; charset=utf-8");
+  }
+
+  // Reader app page for specific edition
   const paperMatch = url.pathname.match(/^\/paper\/([a-z0-9-]+)$/);
   if (req.method === "GET" && paperMatch) {
     const issue = await dbFindIssue(paperMatch[1]);
@@ -824,6 +956,27 @@ async function handleRequest(req, res) {
     issue.viewsByMonth[month] = (issue.viewsByMonth[month] || 0) + 1;
     await dbSaveIssue(issue);
     return serveFile(res, path.join(PUBLIC_DIR, "paper.html"), "text/html; charset=utf-8");
+  }
+
+  // ----- Static Uploaded Images (/uploads/*) -----
+  if (req.method === "GET" && url.pathname.startsWith("/uploads/")) {
+    const filename = path.basename(url.pathname);
+    const targetPath = path.join(PUBLIC_DIR, "uploads", filename);
+    if (fs.existsSync(targetPath)) {
+      const ext = path.extname(filename).toLowerCase();
+      const mime = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".svg": "image/svg+xml",
+        ".ico": "image/x-icon",
+        ".gif": "image/gif"
+      }[ext] || "application/octet-stream";
+      return serveFile(res, targetPath, mime);
+    }
+    res.writeHead(404);
+    return res.end("Upload not found");
   }
 
   // ----- Media files -----

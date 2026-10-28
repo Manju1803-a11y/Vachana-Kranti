@@ -65,7 +65,13 @@ function showToast(message, isError = false) {
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
-  const result = await response.json();
+  let result = null;
+  const rawText = await response.text();
+  try {
+    result = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    result = { error: rawText || `Request failed (${response.status})` };
+  }
   if (response.status === 401 && !url.startsWith("/api/auth/")) {
     window.location.replace("/login");
     throw new Error("Your session has expired. Sign in again.");
@@ -387,14 +393,17 @@ function renderManageTable() {
     scheduleCell.textContent = issue.status === "scheduled" ? formatDateTime(issue.scheduledAt) : "—";
     const pagesCell = document.createElement("td");
     pagesCell.textContent = `${issue.files.length} ${issue.files.length === 1 ? "page" : "pages"}`;
-    const actionsCell = document.createElement("td");
+        const actionsCell = document.createElement("td");
     actionsCell.className = "action-cell";
+    const isPublic = issue.status === "public";
     actionsCell.append(
-      makeActionButton("Open", "open", issue.id),
-      makeActionButton("Edit", "edit", issue.id),
-      makeActionButton("Copy link", "copy", issue.id),
-      makeActionButton("Delete", "delete", issue.id, "delete-action"),
-      makeActionButton("⋯", "more", issue.id, "more-action")
+      makeActionButton("Preview", "preview", issue.id, "action-preview"),
+      makeActionButton("Edit Info", "edit-info", issue.id, "action-edit-info"),
+      makeActionButton("Edit Pages", "edit-pages", issue.id, "action-edit-pages"),
+      makeActionButton("Area Mapping", "area-mapping", issue.id, "action-area-mapping"),
+      makeActionButton(isPublic ? "Make Private" : "Make Public", "toggle-status", issue.id, isPublic ? "action-make-private" : "action-make-public"),
+      makeActionButton("Schedule", "schedule", issue.id, "action-schedule"),
+      makeActionButton("Remove", "delete", issue.id, "delete-action")
     );
     row.append(checkCell, numberCell, nameCell, dateCell, stateCell, scheduleCell, pagesCell, actionsCell);
     issueRows.append(row);
@@ -516,7 +525,7 @@ async function loadIssues() {
   const result = await requestJson("/api/issues");
   issues = result.issues;
   const latestPublic = issues.find((issue) => issue.status === "public");
-  const siteLink = latestPublic ? latestPublic.url : "/";
+  const siteLink = latestPublic ? (latestPublic.url || latestPublic.readerUrl || `/paper/${latestPublic.alias || latestPublic.id}`) : "/paper";
   document.querySelectorAll(".external-nav, .visit-site").forEach((link) => { link.href = siteLink; });
   renderManageTable();
   renderRecent();
@@ -532,7 +541,7 @@ async function refreshData() {
     updateSelect(categoryFilter, categories, categoryFilter.value);
     issues = result.issues;
     const latestPublic = issues.find((issue) => issue.status === "public");
-    const siteLink = latestPublic ? latestPublic.url : "/";
+    const siteLink = latestPublic ? (latestPublic.url || latestPublic.readerUrl || `/paper/${latestPublic.alias || latestPublic.id}`) : "/paper";
     document.querySelectorAll(".external-nav, .visit-site").forEach((link) => { link.href = siteLink; });
     renderManageTable();
     renderRecent();
@@ -758,24 +767,64 @@ issueRows.addEventListener("click", async (event) => {
   const issue = issues.find((item) => item.id === button.dataset.id);
   if (!issue) return;
   try {
-    if (button.dataset.action === "open") window.open(issue.url, "_blank", "noopener");
-    if (button.dataset.action === "edit") editIssue(issue);
-    if (button.dataset.action === "copy") {
-      await navigator.clipboard.writeText(issue.url);
-      showToast("Edition URL copied.");
+    const action = button.dataset.action;
+    const editionTitle = issue.name || issue.title || "Edition";
+    const previewUrl = issue.url || issue.readerUrl || `/paper/${issue.alias || issue.id}`;
+
+    if (action === "open" || action === "preview") {
+      window.open(previewUrl, "_blank", "noopener");
+      return;
     }
-    if (button.dataset.action === "delete") {
-      if (!window.confirm(`Permanently delete “${issue.name}” and its uploaded files?`)) return;
+    if (action === "edit" || action === "edit-info") {
+      editIssue(issue);
+      document.querySelector("#issue-name")?.focus();
+      return;
+    }
+    if (action === "edit-pages") {
+      editIssue(issue);
+      const uploadCol = document.querySelector("#upload-column");
+      if (uploadCol) {
+        uploadCol.scrollIntoView({ behavior: "smooth", block: "center" });
+        uploadCol.style.transition = "box-shadow 0.3s";
+        uploadCol.style.boxShadow = "0 0 0 4px #3b82f6";
+        setTimeout(() => { uploadCol.style.boxShadow = ""; }, 1800);
+      }
+      return;
+    }
+    if (action === "area-mapping") {
+      openAreaMappingModal(issue);
+      return;
+    }
+    if (action === "toggle-status") {
+      const newStatus = issue.status === "public" ? "draft" : "public";
+      const confirmPrompt = newStatus === "draft"
+        ? `Make edition "${editionTitle}" private?\nReaders will not be able to view it until published again.`
+        : `Make edition "${editionTitle}" public?\nReaders will be able to view it immediately.`;
+      if (!window.confirm(confirmPrompt)) return;
+      await requestJson(`/api/issues/${issue.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+      await refreshData();
+      showToast(`Edition "${editionTitle}" is now ${newStatus === "draft" ? "Private (draft)" : "Public"}.`);
+      return;
+    }
+    if (action === "schedule") {
+      openScheduleModal(issue);
+      return;
+    }
+    if (action === "copy") {
+      await navigator.clipboard.writeText(previewUrl);
+      showToast("Edition URL copied to clipboard.");
+      return;
+    }
+    if (action === "delete") {
+      if (!window.confirm(`Are you sure you want to permanently remove edition "${editionTitle}" and its uploaded pages?\n\nThis action cannot be undone.`)) return;
       await requestJson(`/api/issues/${issue.id}`, { method: "DELETE" });
       await refreshData();
-      showToast("Edition deleted.");
-    }
-    if (button.dataset.action === "more") {
-      const action = issue.status === "public" ? "Move to draft" : "Publish now";
-      if (!window.confirm(`${action}: ${issue.name}?`)) return;
-      await updateIssue(issue, { status: issue.status === "public" ? "draft" : "public", scheduledAt: "" });
-      await refreshData();
-      showToast(`${issue.name} updated.`);
+      showToast(`Edition "${editionTitle}" was successfully removed.`);
+      return;
     }
   } catch (error) {
     showToast(error.message, true);
@@ -1093,3 +1142,403 @@ document.addEventListener("keydown", (event) => {
 
 updateScheduleField();
 refreshData().catch((error) => showToast(error.message, true));
+
+
+// ── Image Upload & Preview Helpers ─────────────────────────────────────
+function updateFaviconPreview(url) {
+  const img = document.querySelector("#favicon-preview-img");
+  const placeholder = document.querySelector("#favicon-preview-placeholder");
+  const clearBtn = document.querySelector("#clear-favicon-btn");
+  if (url && typeof url === "string" && url.trim()) {
+    if (img) { img.src = url; img.hidden = false; }
+    if (placeholder) placeholder.hidden = true;
+    if (clearBtn) clearBtn.hidden = false;
+  } else {
+    if (img) { img.src = ""; img.hidden = true; }
+    if (placeholder) placeholder.hidden = false;
+    if (clearBtn) clearBtn.hidden = true;
+  }
+}
+
+function updateLogoPreview(url) {
+  const img = document.querySelector("#logo-preview-img");
+  const placeholder = document.querySelector("#logo-preview-placeholder");
+  const clearBtn = document.querySelector("#clear-logo-btn");
+  if (url && typeof url === "string" && url.trim()) {
+    if (img) { img.src = url; img.hidden = false; }
+    if (placeholder) placeholder.hidden = true;
+    if (clearBtn) clearBtn.hidden = false;
+  } else {
+    if (img) { img.src = ""; img.hidden = true; }
+    if (placeholder) placeholder.hidden = false;
+    if (clearBtn) clearBtn.hidden = true;
+  }
+}
+
+async function handleImageUpload(file, type = "image") {
+  if (!file) return null;
+  const maxBytes = type === "favicon" ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error(`File "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed is ${type === "favicon" ? "2 MB" : "5 MB"}.`);
+  }
+  const allowed = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/x-icon", "image/gif"];
+  if (!allowed.includes(file.type)) {
+    throw new Error(`Unsupported image format (${file.type || file.name}). Please select a PNG, SVG, JPG, or WEBP image.`);
+  }
+
+  const base64Data = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read image file."));
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    const result = await requestJson("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, data: base64Data, type: file.type })
+    });
+    return result.url;
+  } catch (err) {
+    console.warn("Server upload failed, using data URL:", err.message);
+    return base64Data;
+  }
+}
+
+// ── Schedule Publication Controller ────────────────────────────────────
+let schedulingIssue = null;
+function openScheduleModal(issue) {
+  schedulingIssue = issue;
+  const modal = document.querySelector("#schedule-modal");
+  document.querySelector("#schedule-modal-title").textContent = `Schedule: ${issue.name || issue.title}`;
+  const dtInput = document.querySelector("#schedule-datetime-input");
+  if (issue.scheduledAt) {
+    dtInput.value = new Date(issue.scheduledAt).toISOString().slice(0, 16);
+  } else {
+    const tmrw = new Date();
+    tmrw.setDate(tmrw.getDate() + 1);
+    tmrw.setHours(6, 0, 0, 0);
+    dtInput.value = tmrw.toISOString().slice(0, 16);
+  }
+  document.querySelector("#schedule-error").hidden = true;
+  modal.hidden = false;
+}
+
+function closeScheduleModal() {
+  const modal = document.querySelector("#schedule-modal");
+  if (modal) modal.hidden = true;
+  schedulingIssue = null;
+}
+
+// ── Area Mapping Controller ───────────────────────────────────────────
+let mappingIssue = null;
+let currentMappingPageIndex = 0;
+let activeHotspotIndex = -1;
+
+function openAreaMappingModal(issue) {
+  mappingIssue = issue;
+  mappingIssue.areas = Array.isArray(issue.areas) ? issue.areas : [];
+  currentMappingPageIndex = 0;
+  activeHotspotIndex = -1;
+
+  const modal = document.querySelector("#area-mapping-modal");
+  document.querySelector("#area-modal-title").textContent = `Area Mapping: ${issue.name || issue.title}`;
+  
+  const select = document.querySelector("#area-page-select");
+  select.replaceChildren();
+  (issue.files || []).forEach((file, idx) => {
+    const opt = document.createElement("option");
+    opt.value = String(idx);
+    opt.textContent = `Page ${idx + 1} (${file.name})`;
+    select.append(opt);
+  });
+  
+  modal.hidden = false;
+  renderAreaPage();
+}
+
+function closeAreaMappingModal() {
+  const modal = document.querySelector("#area-mapping-modal");
+  if (modal) modal.hidden = true;
+  mappingIssue = null;
+}
+
+function renderAreaPage() {
+  if (!mappingIssue || !mappingIssue.files || !mappingIssue.files.length) return;
+  const file = mappingIssue.files[currentMappingPageIndex] || mappingIssue.files[0];
+  const pageImg = document.querySelector("#area-page-img");
+  const overlay = document.querySelector("#area-overlay");
+  
+  const src = `/media/${mappingIssue.id}/${encodeURIComponent(file.path)}`;
+  pageImg.src = src;
+
+  overlay.replaceChildren();
+  const pageAreas = (mappingIssue.areas || []).filter(a => a.pageIndex === currentMappingPageIndex);
+  document.querySelector("#area-total-count").textContent = String(pageAreas.length);
+
+  pageAreas.forEach((area, idx) => {
+    const box = document.createElement("div");
+    box.className = "hotspot-box";
+    if (activeHotspotIndex === idx) box.classList.add("is-selected");
+    box.style.left = `${area.x}%`;
+    box.style.top = `${area.y}%`;
+    box.style.width = `${area.width}%`;
+    box.style.height = `${area.height}%`;
+
+    const label = document.createElement("span");
+    label.textContent = area.title || `Hotspot #${idx + 1}`;
+    box.append(label);
+
+    box.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectHotspot(idx);
+    });
+
+    overlay.append(box);
+  });
+
+  renderHotspotItemsList(pageAreas);
+}
+
+function renderHotspotItemsList(pageAreas) {
+  const list = document.querySelector("#area-items-list");
+  list.replaceChildren();
+  if (!pageAreas.length) {
+    const empty = document.createElement("p");
+    empty.className = "area-empty-hint";
+    empty.textContent = "No hotspots mapped on this page yet. Click 'Draw / Add Hotspot' to add clickable articles.";
+    list.append(empty);
+    return;
+  }
+
+  pageAreas.forEach((area, idx) => {
+    const item = document.createElement("div");
+    item.className = `hotspot-item ${activeHotspotIndex === idx ? "is-active" : ""}`;
+    
+    const details = document.createElement("div");
+    details.className = "hotspot-item-details";
+    const title = document.createElement("strong");
+    title.textContent = area.title || `Article #${idx + 1}`;
+    const meta = document.createElement("small");
+    meta.textContent = `${area.category || "General"} · ${Math.round(area.width)}% × ${Math.round(area.height)}%`;
+    details.append(title, meta);
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "hotspot-item-delete";
+    delBtn.title = "Delete hotspot";
+    delBtn.textContent = "🗑";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteHotspot(area);
+    });
+
+    item.append(details, delBtn);
+    item.addEventListener("click", () => selectHotspot(idx));
+    list.append(item);
+  });
+}
+
+function selectHotspot(idx) {
+  activeHotspotIndex = idx;
+  const pageAreas = (mappingIssue.areas || []).filter(a => a.pageIndex === currentMappingPageIndex);
+  const target = pageAreas[idx];
+  const panel = document.querySelector("#hotspot-editor-panel");
+  if (!target) {
+    panel.hidden = true;
+    return;
+  }
+  document.querySelector("#hotspot-title").value = target.title || "";
+  document.querySelector("#hotspot-category").value = target.category || "";
+  document.querySelector("#hotspot-summary").value = target.summary || "";
+  panel.hidden = false;
+  renderAreaPage();
+}
+
+function deleteHotspot(targetArea) {
+  if (!mappingIssue || !mappingIssue.areas) return;
+  mappingIssue.areas = mappingIssue.areas.filter(a => a !== targetArea);
+  activeHotspotIndex = -1;
+  document.querySelector("#hotspot-editor-panel").hidden = true;
+  renderAreaPage();
+  showToast("Hotspot removed.");
+}
+
+// Attach DOM Event Listeners for Modals & Uploads
+function initEnhancedFeatures() {
+  // Favicon & Logo file upload events
+  document.querySelector("#favicon-file-input")?.addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      showToast("Uploading favicon…");
+      const url = await handleImageUpload(file, "favicon");
+      if (url) {
+        const input = document.querySelector("#setting-favicon-url");
+        if (input) input.value = url;
+        updateFaviconPreview(url);
+        showToast("Favicon uploaded. Click 'Save settings' to apply.");
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      event.target.value = "";
+    }
+  });
+
+  document.querySelector("#logo-file-input")?.addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      showToast("Uploading logo…");
+      const url = await handleImageUpload(file, "logo");
+      if (url) {
+        const input = document.querySelector("#setting-logo-url");
+        if (input) input.value = url;
+        updateLogoPreview(url);
+        showToast("Logo uploaded. Click 'Save settings' to apply.");
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      event.target.value = "";
+    }
+  });
+
+  document.querySelector("#setting-favicon-url")?.addEventListener("input", (e) => {
+    updateFaviconPreview(e.target.value.trim());
+  });
+
+  document.querySelector("#setting-logo-url")?.addEventListener("input", (e) => {
+    updateLogoPreview(e.target.value.trim());
+  });
+
+  document.querySelector("#clear-favicon-btn")?.addEventListener("click", () => {
+    const input = document.querySelector("#setting-favicon-url");
+    if (input) input.value = "";
+    updateFaviconPreview("");
+  });
+
+  document.querySelector("#clear-logo-btn")?.addEventListener("click", () => {
+    const input = document.querySelector("#setting-logo-url");
+    if (input) input.value = "";
+    updateLogoPreview("");
+  });
+
+  // Schedule Modal events
+  document.querySelector("#schedule-modal-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!schedulingIssue) return;
+    const dtVal = document.querySelector("#schedule-datetime-input").value;
+    if (!dtVal) return;
+    try {
+      const isoDate = new Date(dtVal).toISOString();
+      await requestJson(`/api/issues/${schedulingIssue.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "scheduled", scheduledAt: isoDate })
+      });
+      closeScheduleModal();
+      await refreshData();
+      showToast(`Edition scheduled for ${formatDateTime(isoDate)}.`);
+    } catch (err) {
+      const errBox = document.querySelector("#schedule-error");
+      if (errBox) {
+        errBox.textContent = err.message;
+        errBox.hidden = false;
+      }
+    }
+  });
+
+  document.querySelector("#close-schedule-modal")?.addEventListener("click", closeScheduleModal);
+  document.querySelector("#btn-cancel-schedule")?.addEventListener("click", closeScheduleModal);
+  document.querySelector("#schedule-modal-backdrop")?.addEventListener("click", closeScheduleModal);
+
+  // Area Mapping Modal events
+  document.querySelector("#btn-apply-hotspot")?.addEventListener("click", () => {
+    const pageAreas = (mappingIssue.areas || []).filter(a => a.pageIndex === currentMappingPageIndex);
+    const target = pageAreas[activeHotspotIndex];
+    if (!target) return;
+    target.title = document.querySelector("#hotspot-title").value.trim() || `Article #${activeHotspotIndex + 1}`;
+    target.category = document.querySelector("#hotspot-category").value.trim();
+    target.summary = document.querySelector("#hotspot-summary").value.trim();
+    document.querySelector("#hotspot-editor-panel").hidden = true;
+    renderAreaPage();
+    showToast("Hotspot details updated.");
+  });
+
+  document.querySelector("#btn-cancel-hotspot")?.addEventListener("click", () => {
+    document.querySelector("#hotspot-editor-panel").hidden = true;
+    activeHotspotIndex = -1;
+    renderAreaPage();
+  });
+
+  document.querySelector("#btn-draw-hotspot")?.addEventListener("click", () => {
+    if (!mappingIssue) return;
+    mappingIssue.areas = mappingIssue.areas || [];
+    const count = mappingIssue.areas.filter(a => a.pageIndex === currentMappingPageIndex).length;
+    const newArea = {
+      pageIndex: currentMappingPageIndex,
+      title: `Article #${count + 1}`,
+      category: "Main News",
+      summary: "",
+      x: 10 + (count % 3) * 15,
+      y: 15 + (count % 3) * 15,
+      width: 40,
+      height: 25
+    };
+    mappingIssue.areas.push(newArea);
+    const pageAreas = mappingIssue.areas.filter(a => a.pageIndex === currentMappingPageIndex);
+    selectHotspot(pageAreas.length - 1);
+  });
+
+  document.querySelector("#btn-clear-areas")?.addEventListener("click", () => {
+    if (!mappingIssue) return;
+    if (!window.confirm("Clear all mapped hotspots on this page?")) return;
+    mappingIssue.areas = (mappingIssue.areas || []).filter(a => a.pageIndex !== currentMappingPageIndex);
+    activeHotspotIndex = -1;
+    document.querySelector("#hotspot-editor-panel").hidden = true;
+    renderAreaPage();
+    showToast("Page hotspots cleared.");
+  });
+
+  document.querySelector("#area-page-select")?.addEventListener("change", (e) => {
+    currentMappingPageIndex = Number(e.target.value) || 0;
+    activeHotspotIndex = -1;
+    document.querySelector("#hotspot-editor-panel").hidden = true;
+    renderAreaPage();
+  });
+
+  document.querySelector("#btn-save-all-areas")?.addEventListener("click", async () => {
+    if (!mappingIssue) return;
+    try {
+      await requestJson(`/api/issues/${mappingIssue.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ areas: mappingIssue.areas || [] })
+      });
+      closeAreaMappingModal();
+      await refreshData();
+      showToast(`Area mappings saved for ${mappingIssue.name || mappingIssue.title}.`);
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  document.querySelector("#close-area-modal")?.addEventListener("click", closeAreaMappingModal);
+  document.querySelector("#btn-dismiss-area")?.addEventListener("click", closeAreaMappingModal);
+  document.querySelector("#area-modal-backdrop")?.addEventListener("click", closeAreaMappingModal);
+}
+
+// Hook into loadSettingsSection to update previews
+const origLoadSettings = loadSettingsSection;
+loadSettingsSection = async function(section = activeSettingsSection) {
+  await origLoadSettings(section);
+  if (section === "basic" && settingsCache && settingsCache.basic) {
+    updateFaviconPreview(settingsCache.basic.faviconUrl || "");
+    updateLogoPreview(settingsCache.basic.logoUrl || "");
+  }
+};
+
+initEnhancedFeatures();

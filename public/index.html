@@ -27,7 +27,7 @@
         <button class="nav-link" type="button" data-view="settings"><span class="nav-icon">⚙</span>E-paper settings</button>
         <button class="nav-link" type="button" data-view="theme"><span class="nav-icon">◐</span>Theme setup</button>
         <button class="nav-link" type="button" data-view="pages"><span class="nav-icon">▧</span>Page management</button>
-        <a class="nav-link external-nav" href="/" target="_blank" rel="noopener"><span class="nav-icon">◉</span>View e-paper site</a>
+        <a class="nav-link external-nav" href="/paper" target="_blank" rel="noopener"><span class="nav-icon">◉</span>View e-paper site</a>
       </nav>
       <div class="sidebar-bottom"><span class="sidebar-status"></span> Local server <span class="version">v1.1</span></div>
     </aside>
@@ -35,7 +35,7 @@
     <div class="admin-shell">
       <header class="admin-topbar">
         <div class="breadcrumb"><span>VACHANA KRANTI</span><b>/</b><strong id="current-page-label">DASHBOARD</strong></div>
-        <div class="topbar-actions"><span class="server-indicator"><i></i> Server online</span><a class="visit-site" href="/" target="_blank" rel="noopener">OPEN SITE ↗</a><button class="admin-signout" id="admin-signout" type="button">SIGN OUT</button></div>
+        <div class="topbar-actions"><span class="server-indicator"><i></i> Server online</span><a class="visit-site" href="/paper" target="_blank" rel="noopener">OPEN SITE ↗</a><button class="admin-signout" id="admin-signout" type="button">SIGN OUT</button></div>
       </header>
 
       <main class="admin-main">
@@ -162,8 +162,46 @@
                   <label>Timezone<select name="timezone"><option>Asia/Kolkata</option><option>UTC</option><option>Asia/Dubai</option><option>Europe/London</option><option>America/New_York</option></select></label>
                   <label>Language<select name="language"><option value="en">English</option><option value="kn">Kannada</option><option value="hi">Hindi</option></select></label>
                   <label>Credit / publisher<input name="credit" maxlength="120"></label>
-                  <label>Favicon URL<input name="faviconUrl" type="url" placeholder="https://example.com/favicon.png"></label>
-                  <label>Newspaper logo URL<input name="logoUrl" type="url" placeholder="https://example.com/logo.png"></label>
+                  <div class="image-upload-card">
+                    <label class="field-label" for="setting-favicon-url">Favicon</label>
+                    <div class="image-upload-box">
+                      <div class="image-preview-thumb favicon-thumb" id="favicon-preview-thumb">
+                        <img id="favicon-preview-img" alt="Favicon preview" hidden />
+                        <span id="favicon-preview-placeholder" class="preview-placeholder">No favicon</span>
+                      </div>
+                      <div class="image-upload-controls">
+                        <input name="faviconUrl" id="setting-favicon-url" type="text" placeholder="https://... or upload below" />
+                        <div class="upload-btn-row">
+                          <label class="button button-light upload-file-btn">
+                            <span>📁 Browse Image</span>
+                            <input type="file" id="favicon-file-input" accept="image/png,image/x-icon,image/svg+xml,image/jpeg,image/webp" hidden />
+                          </label>
+                          <button type="button" class="button button-outline clear-image-btn" id="clear-favicon-btn" hidden>Remove</button>
+                        </div>
+                        <small class="field-hint">Upload PNG, ICO, SVG, JPG (Max 2 MB).</small>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="image-upload-card">
+                    <label class="field-label" for="setting-logo-url">Newspaper Logo</label>
+                    <div class="image-upload-box">
+                      <div class="image-preview-thumb logo-thumb" id="logo-preview-thumb">
+                        <img id="logo-preview-img" alt="Logo preview" hidden />
+                        <span id="logo-preview-placeholder" class="preview-placeholder">No logo</span>
+                      </div>
+                      <div class="image-upload-controls">
+                        <input name="logoUrl" id="setting-logo-url" type="text" placeholder="https://... or upload below" />
+                        <div class="upload-btn-row">
+                          <label class="button button-light upload-file-btn">
+                            <span>📁 Browse Image</span>
+                            <input type="file" id="logo-file-input" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden />
+                          </label>
+                          <button type="button" class="button button-outline clear-image-btn" id="clear-logo-btn" hidden>Remove</button>
+                        </div>
+                        <small class="field-hint">Upload PNG, SVG, JPG, WEBP (Max 5 MB). Displayed in masthead.</small>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="settings-panel" data-settings-panel="seo">
@@ -261,6 +299,101 @@
         <footer class="admin-footer">VACHANA KRANTI <span>·</span> Independent stories, shared widely.</footer>
       </main>
     </div>
+    <!-- Area Mapping Modal -->
+    <div id="area-mapping-modal" class="admin-modal" hidden>
+      <div class="modal-backdrop" id="area-modal-backdrop"></div>
+      <div class="modal-dialog area-mapping-dialog" role="dialog" aria-modal="true" aria-labelledby="area-modal-title">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">EDITION MANAGEMENT</span>
+            <h2 id="area-modal-title">Area Mapping &amp; Article Clips</h2>
+            <p id="area-modal-subtitle">Create and manage clickable article areas on newspaper pages.</p>
+          </div>
+          <button type="button" class="modal-close" id="close-area-modal" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body area-mapping-body">
+          <div class="area-toolbar-row">
+            <label class="area-page-label">
+              <span>Selected Page:</span>
+              <select id="area-page-select"></select>
+            </label>
+            <div class="area-tools-actions">
+              <button type="button" id="btn-draw-hotspot" class="button button-primary">＋ Draw / Add Hotspot</button>
+              <button type="button" id="btn-clear-areas" class="button button-outline">Clear Page Hotspots</button>
+            </div>
+          </div>
+
+          <div class="area-workspace-grid">
+            <div class="area-canvas-card">
+              <div class="area-canvas-scroll">
+                <div class="area-canvas-container" id="area-canvas-container">
+                  <img id="area-page-img" alt="Page preview" />
+                  <div id="area-overlay" class="area-overlay"></div>
+                </div>
+              </div>
+              <p class="area-canvas-hint">Click &amp; drag on the page image to outline an article, or click "Draw / Add Hotspot".</p>
+            </div>
+
+            <div class="area-sidebar-card">
+              <div class="area-sidebar-header">
+                <h3>Mapped Hotspots (<span id="area-total-count">0</span>)</h3>
+              </div>
+              <div class="area-items-list" id="area-items-list">
+                <p class="area-empty-hint">No hotspots mapped on this page yet. Draw or add one to start.</p>
+              </div>
+
+              <!-- Hotspot editor sub-panel -->
+              <div class="hotspot-editor-panel" id="hotspot-editor-panel" hidden>
+                <h4>Edit Article Hotspot</h4>
+                <label>Article Title
+                  <input type="text" id="hotspot-title" placeholder="Headline / Article title" />
+                </label>
+                <label>Category / Tag
+                  <input type="text" id="hotspot-category" placeholder="e.g. State News, Editorial" />
+                </label>
+                <label>Article Summary / Text
+                  <textarea id="hotspot-summary" rows="3" placeholder="Brief summary or description..."></textarea>
+                </label>
+                <div class="hotspot-editor-actions">
+                  <button type="button" id="btn-apply-hotspot" class="button button-primary">Apply Hotspot</button>
+                  <button type="button" id="btn-cancel-hotspot" class="button button-light">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="button button-light" id="btn-dismiss-area">Close</button>
+          <button type="button" class="button button-primary" id="btn-save-all-areas">Save Mappings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schedule Publication Modal -->
+    <div id="schedule-modal" class="admin-modal" hidden>
+      <div class="modal-backdrop" id="schedule-modal-backdrop"></div>
+      <div class="modal-dialog schedule-dialog" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">PUBLICATION SCHEDULE</span>
+            <h2 id="schedule-modal-title">Schedule Edition</h2>
+            <p id="schedule-modal-subtitle">Pick the future date and time for automatic publication.</p>
+          </div>
+          <button type="button" class="modal-close" id="close-schedule-modal" aria-label="Close">×</button>
+        </div>
+        <form id="schedule-modal-form" class="modal-body schedule-modal-body">
+          <label class="field-label" for="schedule-datetime-input">Publish Date &amp; Time <span class="required">*</span></label>
+          <input type="datetime-local" id="schedule-datetime-input" required class="schedule-datetime-input" />
+          <p class="field-hint">The edition will stay as "Scheduled" and become public automatically at this time.</p>
+          <p id="schedule-error" class="form-error" hidden></p>
+          <div class="modal-footer">
+            <button type="button" class="button button-light" id="btn-cancel-schedule">Cancel</button>
+            <button type="submit" class="button button-primary" id="btn-confirm-schedule">Save Schedule</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <script src="/app.js" defer></script>
   </body>
 </html>

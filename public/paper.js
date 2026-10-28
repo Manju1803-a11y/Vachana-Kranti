@@ -29,10 +29,46 @@ function closeViewer() {
   viewerImage.src = "";
 }
 
-function renderFile(file, index, issueIdValue) {
+function openArticleModal(area) {
+  let modal = document.querySelector("#article-viewer-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "article-viewer-modal";
+    modal.className = "image-viewer";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.innerHTML = [
+      '<div style="background:#fff; border-radius:12px; padding:28px; max-width:620px; width:92%; position:relative; box-shadow:0 16px 48px rgba(0,0,0,0.3); max-height:85vh; overflow-y:auto;">',
+      '  <button id="article-modal-close" type="button" style="position:absolute; top:14px; right:16px; background:none; border:none; font-size:26px; cursor:pointer; color:#64748b; line-height:1;">×</button>',
+      '  <div style="font-size:12px; font-weight:700; color:var(--gold, #d8ac5b); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;" id="article-modal-cat"></div>',
+      '  <h2 style="font-size:22px; font-weight:700; color:#1a202c; margin:0 0 16px; line-height:1.35;" id="article-modal-title"></h2>',
+      '  <div style="font-size:15px; line-height:1.75; color:#374151; white-space:pre-wrap;" id="article-modal-summary"></div>',
+      '</div>'
+    ].join("");
+    document.body.appendChild(modal);
+    modal.querySelector("#article-modal-close").addEventListener("click", () => {
+      modal.hidden = true;
+      document.body.classList.remove("viewer-open");
+    });
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        modal.hidden = true;
+        document.body.classList.remove("viewer-open");
+      }
+    });
+  }
+  modal.querySelector("#article-modal-cat").textContent = area.category || "Article";
+  modal.querySelector("#article-modal-title").textContent = area.title || "Article Detail";
+  modal.querySelector("#article-modal-summary").textContent = area.summary || "No summary provided for this mapped article.";
+  modal.hidden = false;
+  document.body.classList.add("viewer-open");
+}
+
+function renderFile(file, index, issueIdValue, issue) {
   const source = `/media/${issueIdValue}/${encodeURIComponent(file.path)}`;
   const section = document.createElement("article");
   section.className = "paper-page";
+  section.style.position = "relative";
   const heading = document.createElement("div");
   heading.className = "paper-page-heading";
   const pageLabel = document.createElement("span");
@@ -54,6 +90,11 @@ function renderFile(file, index, issueIdValue) {
     download.textContent = "Open or download this PDF";
     section.append(frame, download);
   } else {
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.style.display = "block";
+    wrapper.style.width = "100%";
+
     const image = document.createElement("img");
     image.className = "paper-image";
     image.src = source;
@@ -70,7 +111,41 @@ function renderFile(file, index, issueIdValue) {
         openViewer(source, file.name);
       }
     });
-    section.append(image);
+    wrapper.append(image);
+
+    const pageAreas = (issue?.areas || []).filter(a => a.pageIndex === index);
+    pageAreas.forEach(area => {
+      const hotspot = document.createElement("a");
+      hotspot.className = "reader-hotspot";
+      hotspot.href = "#";
+      hotspot.title = area.title || "Read article";
+      hotspot.style.position = "absolute";
+      hotspot.style.left = `${area.coords?.x || 10}%`;
+      hotspot.style.top = `${area.coords?.y || 10}%`;
+      hotspot.style.width = `${area.coords?.width || 20}%`;
+      hotspot.style.height = `${area.coords?.height || 20}%`;
+      hotspot.style.cursor = "pointer";
+      hotspot.style.border = "2px dashed rgba(23, 76, 58, 0.45)";
+      hotspot.style.background = "rgba(216, 172, 91, 0.18)";
+      hotspot.style.borderRadius = "4px";
+      hotspot.style.transition = "all 0.2s ease";
+      hotspot.addEventListener("mouseenter", () => {
+        hotspot.style.background = "rgba(23, 76, 58, 0.3)";
+        hotspot.style.borderColor = "var(--green, #174c3a)";
+      });
+      hotspot.addEventListener("mouseleave", () => {
+        hotspot.style.background = "rgba(216, 172, 91, 0.18)";
+        hotspot.style.borderColor = "rgba(23, 76, 58, 0.45)";
+      });
+      hotspot.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openArticleModal(area);
+      });
+      wrapper.append(hotspot);
+    });
+
+    section.append(wrapper);
   }
   const download = document.createElement("a");
   download.className = "page-download";
@@ -102,6 +177,23 @@ async function applyReaderSettings(issue, readerData) {
       if (theme.navbar.sticky) document.querySelector(".paper-topbar").classList.add("reader-sticky");
     }
     document.querySelector("#reader-credit").textContent = basic.credit || basic.siteName || "Vachana Kranti";
+
+    if (basic.logoUrl) {
+      const brand = document.querySelector(".paper-topbar .brand");
+      if (brand) {
+        brand.innerHTML = `<img src="${basic.logoUrl}" alt="${basic.siteName || 'Vachana Kranti'}" style="max-height:42px; width:auto; object-fit:contain; display:block;">`;
+      }
+    }
+    if (basic.faviconUrl) {
+      let iconLink = document.querySelector("link[rel*='icon']");
+      if (!iconLink) {
+        iconLink = document.createElement("link");
+        iconLink.rel = "icon";
+        document.head.appendChild(iconLink);
+      }
+      iconLink.href = basic.faviconUrl;
+    }
+
     const category = document.querySelector("#paper-category");
     if (!theme.appearance?.showCategory) category.hidden = true;
     if (watermark.enabled) {
@@ -161,7 +253,7 @@ async function loadIssue() {
     document.querySelector("#paper-date").textContent = formatDate(issue.date);
     document.querySelector("#page-count").textContent = `${issue.files.length} ${issue.files.length === 1 ? "page" : "pages"}`;
     document.querySelector("#paper-category").textContent = issue.category || "Main Edition";
-    issue.files.forEach((file, index) => pageStack.append(renderFile(file, index, issue.id)));
+    issue.files.forEach((file, index) => pageStack.append(renderFile(file, index, issue.id, issue)));
     const navigation = document.querySelector("#edition-navigation");
     const newerIssue = result.newerIssue;
     const olderIssue = result.olderIssue;
