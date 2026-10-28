@@ -858,3 +858,14 @@ input[type="color"] { height: 42px; padding: 4px 8px; cursor: pointer; }
     break-inside: avoid !important;
   }
 }
+
+
+/* Brand logo styling */
+.brand-logo-img {
+  height: 38px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  border-radius: 6px;
+  display: block;
+}

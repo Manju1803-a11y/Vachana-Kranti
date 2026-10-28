@@ -5,8 +5,8 @@
     "timezone": "Asia/Kolkata",
     "language": "en",
     "credit": "Vachana Kranti",
-    "faviconUrl": "",
-    "logoUrl": ""
+    "faviconUrl": "/logo.png",
+    "logoUrl": "/logo.png"
   },
   "seo": {
     "title": "Vachana Kranti — E-paper",

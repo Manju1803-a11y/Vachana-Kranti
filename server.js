@@ -97,7 +97,7 @@ async function initDb() {
     const defaults = {
       categories: ["Main Edition", "Special Edition", "Supplement"],
       settings: {
-        basic: { siteName: "Vachana Kranti", country: "India", timezone: "Asia/Kolkata", language: "en", credit: "Vachana Kranti", faviconUrl: "", logoUrl: "" },
+        basic: { siteName: "Vachana Kranti", country: "India", timezone: "Asia/Kolkata", language: "en", credit: "Vachana Kranti", faviconUrl: "/logo.png", logoUrl: "/logo.png" },
         seo: { title: "Vachana Kranti — E‑paper", description: "Read the latest Vachana Kranti digital editions.", keywords: "", canonicalUrl: "", robots: "index,follow" },
         social: { facebook: "", instagram: "", youtube: "", whatsapp: "", x: "" },
         push: { enabled: false, publicKey: "", vapidSubject: "" },
