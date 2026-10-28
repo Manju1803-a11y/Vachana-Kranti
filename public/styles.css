@@ -755,3 +755,106 @@ input[type="color"] { height: 42px; padding: 4px 8px; cursor: pointer; }
   transition: background .15s;
 }
 .viewer-close:hover { background: rgba(255,255,255,.25); }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   PRINT OPTIMIZATION — Clean 1-Page-Per-Sheet Output
+════════════════════════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+
+  body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 12pt;
+    width: 100% !important;
+  }
+
+  /* Hide unnecessary UI chrome when printing */
+  .paper-topbar,
+  .topbar,
+  .reader-actions,
+  .reader-toolbar,
+  .edition-navigation,
+  .reader-footer,
+  .image-viewer,
+  .reader-hotspot,
+  .paper-page-heading,
+  .page-label,
+  .breadcrumb,
+  .admin-signout,
+  .visit-site,
+  .server-indicator,
+  .pdf-fallback {
+    display: none !important;
+  }
+
+  /* Compact reader container */
+  .reader {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Compact masthead to prevent forcing an extra blank page */
+  .edition-masthead {
+    border: none !important;
+    padding: 8px 12px 6px !important;
+    margin: 0 !important;
+    text-align: center !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .edition-masthead h1 {
+    font-size: 18pt !important;
+    margin: 0 0 4px !important;
+  }
+
+  .edition-masthead .eyebrow {
+    font-size: 8pt !important;
+    margin: 0 0 2px !important;
+  }
+
+  .edition-meta {
+    margin-top: 2px !important;
+    font-size: 8pt !important;
+  }
+
+  /* Page stack & individual pages */
+  .page-stack {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .paper-page,
+  .page-section {
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  /* Ensure newspaper page image fits perfectly on a single print sheet without trailing blank overflow */
+  .paper-image,
+  .page-image {
+    display: block !important;
+    width: auto !important;
+    max-width: 100% !important;
+    max-height: 94vh !important;
+    margin: 0 auto !important;
+    object-fit: contain !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
