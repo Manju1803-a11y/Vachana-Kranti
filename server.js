@@ -1021,6 +1021,8 @@ async function handleRequest(req, res) {
   }
 
   const staticMap = {
+    "/logo.png": ["logo.png", "image/png"],
+    "/favicon.ico": ["logo.png", "image/png"],
     "/styles.css": ["styles.css", "text/css; charset=utf-8"],
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
     "/login.css": ["login.css", "text/css; charset=utf-8"],
@@ -1031,6 +1033,17 @@ async function handleRequest(req, res) {
   if (req.method === "GET" && staticMap[url.pathname]) {
     const [fname, ctype] = staticMap[url.pathname];
     return serveFile(res, path.join(PUBLIC_DIR, fname), ctype);
+  }
+
+  // Also serve any other static files from PUBLIC_DIR if they exist
+  if (req.method === "GET") {
+    const safePath = path.normalize(url.pathname).replace(/^(\.\.[\/\\])+/, "");
+    const diskPath = path.join(PUBLIC_DIR, safePath);
+    if (fs.existsSync(diskPath) && fs.statSync(diskPath).isFile()) {
+      const ext = path.extname(diskPath).toLowerCase();
+      const mime = MIME_BY_EXTENSION[ext] || "application/octet-stream";
+      return serveFile(res, diskPath, mime);
+    }
   }
 
   // Fallback 404
