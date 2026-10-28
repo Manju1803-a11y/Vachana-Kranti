@@ -1,16 +1,16 @@
 {
   "basic": {
-    "siteName": "Vachana Kranti",
+    "siteName": "ePaperHub",
     "country": "India",
     "timezone": "Asia/Kolkata",
     "language": "en",
-    "credit": "Vachana Kranti",
+    "credit": "ePaperHub",
     "faviconUrl": "/logo.png",
     "logoUrl": "/logo.png"
   },
   "seo": {
-    "title": "Vachana Kranti — E-paper",
-    "description": "Read the latest Vachana Kranti digital editions.",
+    "title": "ePaperHub — E-paper",
+    "description": "Read the latest digital editions.",
     "keywords": "",
     "canonicalUrl": "",
     "robots": "index,follow"
@@ -29,7 +29,7 @@
   },
   "watermark": {
     "enabled": false,
-    "text": "Vachana Kranti",
+    "text": "ePaperHub",
     "opacity": 35,
     "position": "bottom-right"
   },
@@ -43,7 +43,7 @@
   },
   "pwa": {
     "enabled": true,
-    "appName": "Vachana Kranti",
+    "appName": "ePaperHub",
     "shortName": "Vachana",
     "themeColor": "#174c3a",
     "backgroundColor": "#f4f6f2"

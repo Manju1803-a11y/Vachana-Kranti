@@ -569,7 +569,7 @@ async function loadAdminBranding() {
 
 function applyAdminBranding(settings) {
   const basic = settings.basic || {};
-  const siteName = basic.siteName || "Vachana Kranti";
+  const siteName = basic.siteName || "ePaperHub";
   const sbStrong = document.querySelector(".sidebar-brand strong"); if (sbStrong) sbStrong.textContent = siteName;
   document.title = `${siteName} — E-paper desk`;
   if (basic.faviconUrl) {
@@ -988,7 +988,7 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
     });
     settingsCache = result.settings;
     if (activeSettingsSection === "basic") {
-      const siteName = values.siteName || "Vachana Kranti";
+      const siteName = values.siteName || "ePaperHub";
       document.title = `${siteName} — E-paper desk`;
       const sbStrong = document.querySelector(".sidebar-brand strong"); if (sbStrong) sbStrong.textContent = siteName;
     }

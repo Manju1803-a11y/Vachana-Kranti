@@ -97,17 +97,17 @@ async function initDb() {
     const defaults = {
       categories: ["Main Edition", "Special Edition", "Supplement"],
       settings: {
-        basic: { siteName: "Vachana Kranti", country: "India", timezone: "Asia/Kolkata", language: "en", credit: "Vachana Kranti", faviconUrl: "/logo.png", logoUrl: "/logo.png" },
-        seo: { title: "Vachana Kranti — E‑paper", description: "Read the latest Vachana Kranti digital editions.", keywords: "", canonicalUrl: "", robots: "index,follow" },
+        basic: { siteName: "ePaperHub", country: "India", timezone: "Asia/Kolkata", language: "en", credit: "ePaperHub", faviconUrl: "/logo.png", logoUrl: "/logo.png" },
+        seo: { title: "ePaperHub — E‑paper", description: "Read the latest Vachana Kranti digital editions.", keywords: "", canonicalUrl: "", robots: "index,follow" },
         social: { facebook: "", instagram: "", youtube: "", whatsapp: "", x: "" },
         push: { enabled: false, publicKey: "", vapidSubject: "" },
-        watermark: { enabled: false, text: "Vachana Kranti", opacity: 35, position: "bottom-right" },
+        watermark: { enabled: false, text: "ePaperHub", opacity: 35, position: "bottom-right" },
         integrations: { googleAnalyticsId: "", googleSiteVerification: "", recaptchaSiteKey: "", recaptchaSecretKey: "", facebookPixelId: "", heatmapSiteId: "" },
-        pwa: { enabled: true, appName: "Vachana Kranti", shortName: "Vachana", themeColor: "#174c3a", backgroundColor: "#f4f6f2" },
+        pwa: { enabled: true, appName: "ePaperHub", shortName: "ePaper", themeColor: "#174c3a", backgroundColor: "#f4f6f2" },
         comments: { enabled: false, requireApproval: true, provider: "local" }
       },
       theme: {
-        navbar: { title: "Vachana Kranti", tagline: "Digital edition", sticky: true },
+        navbar: { title: "ePaperHub", tagline: "Digital edition", sticky: true },
         appearance: { primaryColor: "#174c3a", accentColor: "#d8ac5b", backgroundColor: "#f2f3ef", pageWidth: "900", font: "DM Sans", showCategory: true },
         additionalCss: ""
       },
