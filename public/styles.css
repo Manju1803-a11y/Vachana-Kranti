@@ -869,3 +869,15 @@ input[type="color"] { height: 42px; padding: 4px 8px; cursor: pointer; }
   border-radius: 6px;
   display: block;
 }
+
+.sidebar-brand {
+  justify-content: center !important;
+  padding: 18px 14px !important;
+}
+.sidebar-brand .brand-logo-img {
+  max-height: 52px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  display: block !important;
+  margin: 0 auto !important;
+}

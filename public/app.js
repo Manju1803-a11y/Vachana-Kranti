@@ -570,7 +570,7 @@ async function loadAdminBranding() {
 function applyAdminBranding(settings) {
   const basic = settings.basic || {};
   const siteName = basic.siteName || "Vachana Kranti";
-  document.querySelector(".sidebar-brand strong").textContent = siteName;
+  const sbStrong = document.querySelector(".sidebar-brand strong"); if (sbStrong) sbStrong.textContent = siteName;
   document.title = `${siteName} — E-paper desk`;
   if (basic.faviconUrl) {
     let favicon = document.querySelector('link[rel="icon"]');
@@ -990,7 +990,7 @@ document.querySelector("#settings-form").addEventListener("submit", async (event
     if (activeSettingsSection === "basic") {
       const siteName = values.siteName || "Vachana Kranti";
       document.title = `${siteName} — E-paper desk`;
-      document.querySelector(".sidebar-brand strong").textContent = siteName;
+      const sbStrong = document.querySelector(".sidebar-brand strong"); if (sbStrong) sbStrong.textContent = siteName;
     }
     document.querySelector("#settings-saved").textContent = "Saved successfully.";
     showToast("Site settings saved.");
