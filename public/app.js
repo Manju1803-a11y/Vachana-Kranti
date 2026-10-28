@@ -496,19 +496,28 @@ function renderChart(chart) {
 }
 
 function renderDashboard(stats) {
-  document.querySelector("#stat-editions").textContent = String(stats.totalEditions);
-  document.querySelector("#stat-categories").textContent = String(stats.categoryCount);
-  document.querySelector("#stat-this-month").textContent = stats.thisMonthVisitors.toLocaleString();
-  document.querySelector("#stat-last-month").textContent = stats.lastMonthVisitors.toLocaleString();
-  const used = stats.usedBytes;
-  const total = stats.totalBytes;
-  const percentage = Math.min(100, Math.round((used / total) * 100));
-  document.querySelector("#storage-percent").textContent = `${percentage}%`;
-  document.querySelector("#storage-used").textContent = formatBytes(used);
-  document.querySelector("#storage-free").textContent = formatBytes(Math.max(0, total - used));
-  document.querySelector("#storage-total").textContent = formatBytes(total);
-  document.querySelector("#storage-ring").style.setProperty("--storage-used", `${percentage}%`);
-  renderChart(stats.chart);
+  if (!stats) return;
+  const totalEditions   = stats.totalEditions    != null ? stats.totalEditions   : (stats.total         || 0);
+  const categoriesCount = stats.categoriesCount  != null ? stats.categoriesCount : (stats.categoryCount || 0);
+  const thisMonth       = stats.currentMonthViews != null ? stats.currentMonthViews : (stats.thisMonthVisitors || 0);
+  const lastMonth       = stats.prevMonthViews    != null ? stats.prevMonthViews    : (stats.lastMonthVisitors  || 0);
+  const storage = stats.storage || {};
+  const used  = storage.usedBytes  != null ? storage.usedBytes  : (stats.usedBytes  || 0);
+  const limit = storage.limitBytes != null ? storage.limitBytes : (stats.totalBytes || 10737418240);
+  const pct   = limit > 0 ? Math.min(100, Math.round((used / limit) * 1000) / 10) : 0;
+
+  const setT = (sel, val) => { const el = document.querySelector(sel); if (el) el.textContent = val; };
+  setT('#stat-editions',   String(totalEditions));
+  setT('#stat-categories', String(categoriesCount));
+  setT('#stat-this-month', Number(thisMonth).toLocaleString());
+  setT('#stat-last-month', Number(lastMonth).toLocaleString());
+  setT('#storage-percent', pct + '%');
+  setT('#storage-used',    formatBytes(used));
+  setT('#storage-free',    formatBytes(Math.max(0, limit - used)));
+  setT('#storage-total',   formatBytes(limit));
+  const ring = document.querySelector('#storage-ring');
+  if (ring) ring.style.background = 'conic-gradient(var(--copper,#B8734F) ' + pct + '%, var(--mist,#DCE1E6) ' + pct + '%)';
+  if (stats.chart) renderChart(stats.chart);
   renderSchedule(stats);
   renderRecent();
 }
@@ -546,7 +555,7 @@ async function refreshData() {
     renderManageTable();
     renderRecent();
     renderCategoryList();
-    renderDashboard(result.dashboard);
+    renderDashboard(result.stats);
     applyAdminBranding(result.settings);
   } catch (error) {
     showToast(error.message, true);
