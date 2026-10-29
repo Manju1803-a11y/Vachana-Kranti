@@ -124,6 +124,47 @@ async function initDb() {
         [key, JSON.stringify(value)]
       );
     }
+      // Seed demo edition into database if issues table is empty
+      const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS total FROM issues`);
+      if (Number(countRows[0].total) === 0) {
+        console.log("ℹ️ Seeding default demo edition into PostgreSQL...");
+        const demoId = "9cec51df7a48";
+        const demoIssue = {
+          name: "Vachana Kranti Demo Edition",
+          date: new Date().toISOString().slice(0, 10),
+          createdAt: new Date().toISOString(),
+          category: "Main Edition",
+          status: "public",
+          uploadType: "images",
+          alias: "demo",
+          metaTitle: "Vachana Kranti Demo Edition",
+          metaDescription: "Demo e-paper edition",
+          publishedAt: new Date().toISOString(),
+          files: [
+            {
+              name: "kranti-demo-page.jpg",
+              path: "01.jpg",
+              type: "image/jpeg",
+              size: fs.existsSync(path.join(PUBLIC_DIR, "demo-page.jpg")) ? fs.statSync(path.join(PUBLIC_DIR, "demo-page.jpg")).size : 500000
+            }
+          ]
+        };
+        await pool.query(
+          `INSERT INTO issues(id, data) VALUES($1, $2) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data`,
+          [demoId, JSON.stringify(demoIssue)]
+        );
+
+        const demoImgPath = path.join(PUBLIC_DIR, "demo-page.jpg");
+        if (fs.existsSync(demoImgPath)) {
+          const buf = fs.readFileSync(demoImgPath);
+          await pool.query(
+            `INSERT INTO issue_files(issue_id, sort_order, name, file_path, type, size, data)
+             VALUES($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT DO NOTHING`,
+            [demoId, 0, "kranti-demo-page.jpg", "01.jpg", "image/jpeg", buf.length, buf]
+          );
+        }
+      }
     useDb = true;
     console.log("✅ PostgreSQL schema ready – database active.");
   } catch (err) {
@@ -312,6 +353,16 @@ async function dbGetFileByPath(issueId, filePath) {
       data
     };
   }
+  // Fallback for demo page if file not found in issue_files / data dir
+  const demoFallbackPath = path.join(PUBLIC_DIR, "demo-page.jpg");
+  if (fs.existsSync(demoFallbackPath)) {
+    const data = fs.readFileSync(demoFallbackPath);
+    return {
+      type: "image/jpeg",
+      size: data.length,
+      data
+    };
+  }
   return null;
 }
 
@@ -339,8 +390,21 @@ async function dbTotalFileSize() {
   return total;
 }
 
+// Helper to find issue by ID, alias, or slug
 async function dbFindIssue(key) {
+  if (!key) return null;
+  // If user passed a slugified version of a URL like "http-localhost-3000-paper-9cec51df7a48"
+  // Extract trailing 12-char hex ID if present:
+  const trailingHexMatch = key.match(/([a-f0-9]{12})$/i);
+  const targetId = trailingHexMatch ? trailingHexMatch[1] : null;
+
+  if (targetId) {
+    const issueById = await dbGetIssue(targetId);
+    if (issueById) return issueById;
+  }
+
   if (/^[a-f0-9]{12}$/.test(key)) return dbGetIssue(key);
+
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(`SELECT id, data FROM issues WHERE data->>'alias'=$1`, [key]);
@@ -348,7 +412,7 @@ async function dbFindIssue(key) {
     } catch (err) {}
   }
   const all = await dbListIssues();
-  return all.find(i => i.alias === key) || null;
+  return all.find(i => i.alias === key || (targetId && i.id === targetId)) || null;
 }
 
 // ── Scheduler ───────────────────────────────────────────────────────────
@@ -910,6 +974,9 @@ async function handleRequest(req, res) {
       issue = allPublic[0] || null;
     } else {
       issue = await dbFindIssue(key);
+      if (!issue && (key === "demo" || key.includes("demo"))) {
+        issue = allPublic[0] || null;
+      }
     }
 
     if (!issue || (issue.status && issue.status !== "public")) {
@@ -931,8 +998,8 @@ async function handleRequest(req, res) {
     });
   }
 
-  // Reader app page fallback
-  if (req.method === "GET" && (url.pathname === "/paper" || url.pathname === "/paper/" || url.pathname === "/site")) {
+  // Reader app page fallback & /demo alias
+  if (req.method === "GET" && (url.pathname === "/paper" || url.pathname === "/paper/" || url.pathname === "/site" || url.pathname === "/demo")) {
     const allPublic = (await dbListIssues()).filter(i => i.status === "public");
     const latest = allPublic[0];
     if (latest) {
@@ -945,7 +1012,15 @@ async function handleRequest(req, res) {
   // Reader app page for specific edition
   const paperMatch = url.pathname.match(/^\/paper\/([a-z0-9-]+)$/);
   if (req.method === "GET" && paperMatch) {
-    const issue = await dbFindIssue(paperMatch[1]);
+    const rawKey = paperMatch[1];
+    let issue = await dbFindIssue(rawKey);
+
+    // If still not found and requesting demo, fallback to any public issue
+    if (!issue && (rawKey === "demo" || rawKey.includes("demo"))) {
+      const allPublic = (await dbListIssues()).filter(i => i.status === "public");
+      issue = allPublic[0] || null;
+    }
+
     if (!issue || (issue.status && issue.status !== "public")) {
       res.writeHead(404);
       return res.end("Edition not found or unpublished.");
