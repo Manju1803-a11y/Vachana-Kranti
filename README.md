@@ -4,7 +4,7 @@ A local Node.js publishing desk for creating and reading Vachana Kranti editions
 
 ## Run locally
 
-1. Install Node.js 18 or newer.
+1. Install Node.js 20 or newer.
 2. Configure the management sign-in credentials in the server environment. In PowerShell, run `$env:ADMIN_EMAIL="editor@example.com"` and `$env:ADMIN_PASSWORD="use-a-long-unique-password"` in the same terminal before starting the app.
 3. From this folder, run `npm start`.
 4. Open [http://localhost:3000](http://localhost:3000) and sign in with the configured credentials.
@@ -17,13 +17,19 @@ The editor dashboard and management APIs require a sign-in session. Published re
 
 ## Render deployment
 
-Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `DATABASE_URL` in the Render service environment. `DATABASE_URL` must point to a PostgreSQL database containing the editions and uploaded files. The service health check is `/api/health`; it reports `postgres`, `local-file`, or `unavailable`. A configured but unreachable database returns HTTP 503 rather than silently switching stores and reporting editions as missing.
+Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `DATABASE_URL` in the Render web service environment. This app uses PostgreSQL (`pg`). For a Render PostgreSQL database in the same region, open the database's **Connect** panel and use its **Internal Database URL** as `DATABASE_URL`; do not use or paste the external URL unless connecting from outside Render. Add the URL only through the Render dashboard's environment settings, never to source control or chat.
+
+The app enables TLS for remote PostgreSQL connections by default (`DATABASE_SSL=require`, with certificate verification disabled for compatibility with managed database certificates). Set `DATABASE_SSL=disable` only when the database provider explicitly requires plaintext on a private network, or `DATABASE_SSL=verify-full` when its server certificate is trusted by Node.js. Localhost connections default to TLS disabled. The optional `DATABASE_SSL` setting accepts `disable`, `require`, or `verify-full`.
+
+The service health check is `/api/health`. Production requires a reachable database and returns `{"status":"ok","db":"connected"}` only after a live database query; missing or unreachable storage returns HTTP 503 and `{"status":"error","db":"unavailable"}`. Local development without `DATABASE_URL` uses file storage and reports `db: "local-file"`.
+
+Database schema changes are applied using numbered, repeatable migrations at server startup. A PostgreSQL advisory lock prevents concurrent instances from applying the same migration simultaneously; applied versions are tracked in `schema_migrations`. Run `npm run db:migrate` to apply them manually before starting the server. Migrations do not delete data. No demo edition or sample production data is inserted automatically.
 
 Edition IDs are exactly 12 hexadecimal characters. Use the exact generated URL or the configured edition alias; malformed IDs are never truncated to match another issue. Missing and unpublished editions remain private and return HTTP 404. Storage failures return HTTP 503 and a diagnostic reference in the server log. The unavailable-edition page includes a retry action for recoverable server/network errors.
 
 Render's local filesystem is not a persistent edition store. Do not expect uploads saved in local-file mode to survive a new instance or deployment. Provision PostgreSQL and restore/import any required existing edition records and files before relying on old links. This application does not recreate or automatically publish a missing edition.
 
-Run the reader regression suite with `npm test`.
+Run the reader and database regression suite with `npm test`.
 
 ## Reader and archive
 

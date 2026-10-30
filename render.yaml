@@ -2,7 +2,7 @@ services:
   - type: web
     name: vachana-kranti
     runtime: node
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: node server.js
     envVars:
       - key: ADMIN_EMAIL

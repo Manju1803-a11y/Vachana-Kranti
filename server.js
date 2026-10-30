@@ -3,7 +3,13 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { Pool } = require("pg");
+const {
+  createDatabasePool,
+  databaseErrorDetails,
+  getDatabaseConfig,
+  retryDatabaseConnection,
+  runMigrations
+} = require("./database");
 
 // ── Configuration ───────────────────────────────────────────────────────
 const PORT = Number(process.env.PORT) || 3000;
@@ -27,7 +33,9 @@ const MAX_LOGIN_ATTEMPTS = 5;
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
-const databaseConfigured = Boolean(process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("<user>"));
+const databaseConfig = getDatabaseConfig();
+const databaseConfigured = databaseConfig.mode === "postgres";
+const localFileStorageEnabled = databaseConfig.mode === "local-file";
 let databaseInitializationError = null;
 
 class StorageUnavailableError extends Error {
@@ -57,27 +65,18 @@ const MIME_BY_EXTENSION = {
 
 // ── PostgreSQL & Local Storage State ─────────────────────────────────────
 let useDb = false;
-let pool = null;
-
-if (databaseConfigured) {
-  try {
-    const isLocalhost = process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("127.0.0.1");
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: isLocalhost ? false : { rejectUnauthorized: false }
-    });
-  } catch (err) {
-    databaseInitializationError = err;
-    console.warn("PostgreSQL pool setup warning:", err.message);
-  }
+const pool = createDatabasePool(databaseConfig);
+if (databaseConfig.mode === "unavailable") {
+  databaseInitializationError = new Error(databaseConfig.error);
 }
+let databaseInitializationPromise = null;
+let databaseRetryTimer = null;
 
 // ── Database bootstrap ──────────────────────────────────────────────────
 async function initDb() {
   if (!pool) {
-    if (databaseConfigured) {
-      databaseInitializationError ||= new Error("The PostgreSQL connection pool could not be initialized.");
-      console.warn("⚠️ PostgreSQL is configured but its connection pool is unavailable.");
+    if (!localFileStorageEnabled) {
+      console.error("⚠️ PostgreSQL is unavailable.", { reason: databaseConfig.error || "Database pool could not be initialized." });
       return;
     }
     console.log("ℹ️ Running in local file storage mode (./data).");
@@ -86,28 +85,8 @@ async function initDb() {
   }
 
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS issues (
-        id        CHAR(12)   PRIMARY KEY,
-        data      JSONB      NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS issue_files (
-        id         SERIAL     PRIMARY KEY,
-        issue_id   CHAR(12)   NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-        sort_order INTEGER    NOT NULL DEFAULT 0,
-        name       TEXT       NOT NULL,
-        file_path  TEXT       NOT NULL,
-        type       TEXT       NOT NULL,
-        size       INTEGER    NOT NULL,
-        data       BYTEA      NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS issue_files_issue_id_idx ON issue_files(issue_id, sort_order);
-      CREATE TABLE IF NOT EXISTS app_data (
-        key   TEXT  PRIMARY KEY,
-        value JSONB NOT NULL
-      );
-    `);
+    await retryDatabaseConnection(pool);
+    await runMigrations(pool);
 
     const defaults = {
       categories: ["Main Edition", "Special Edition", "Supplement"],
@@ -139,52 +118,11 @@ async function initDb() {
         [key, JSON.stringify(value)]
       );
     }
-      // Seed demo edition into database if issues table is empty
-      const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS total FROM issues`);
-      if (Number(countRows[0].total) === 0) {
-        console.log("ℹ️ Seeding default demo edition into PostgreSQL...");
-        const demoId = "9cec51df7a48";
-        const demoIssue = {
-          name: "Vachana Kranti Demo Edition",
-          date: new Date().toISOString().slice(0, 10),
-          createdAt: new Date().toISOString(),
-          category: "Main Edition",
-          status: "public",
-          uploadType: "images",
-          alias: "demo",
-          metaTitle: "Vachana Kranti Demo Edition",
-          metaDescription: "Demo e-paper edition",
-          publishedAt: new Date().toISOString(),
-          files: [
-            {
-              name: "kranti-demo-page.jpg",
-              path: "01.jpg",
-              type: "image/jpeg",
-              size: fs.existsSync(path.join(PUBLIC_DIR, "demo-page.jpg")) ? fs.statSync(path.join(PUBLIC_DIR, "demo-page.jpg")).size : 500000
-            }
-          ]
-        };
-        await pool.query(
-          `INSERT INTO issues(id, data) VALUES($1, $2) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data`,
-          [demoId, JSON.stringify(demoIssue)]
-        );
-
-        const demoImgPath = path.join(PUBLIC_DIR, "demo-page.jpg");
-        if (fs.existsSync(demoImgPath)) {
-          const buf = fs.readFileSync(demoImgPath);
-          await pool.query(
-            `INSERT INTO issue_files(issue_id, sort_order, name, file_path, type, size, data)
-             VALUES($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT DO NOTHING`,
-            [demoId, 0, "kranti-demo-page.jpg", "01.jpg", "image/jpeg", buf.length, buf]
-          );
-        }
-      }
     useDb = true;
     databaseInitializationError = null;
     console.log("✅ PostgreSQL schema ready – database active.");
   } catch (err) {
-    console.warn("⚠️ PostgreSQL connection failed:", err.message);
+    console.error("⚠️ PostgreSQL initialization failed.", databaseErrorDetails(err));
     if (databaseConfigured) {
       databaseInitializationError = err;
       console.warn("➡️ Database is configured but unavailable; database-backed requests will return 503.");
@@ -195,8 +133,23 @@ async function initDb() {
   }
 }
 
+function initializeDatabase() {
+  if (databaseInitializationPromise) return databaseInitializationPromise;
+  databaseInitializationPromise = initDb().finally(() => {
+    databaseInitializationPromise = null;
+    if (databaseConfigured && !useDb && !databaseRetryTimer) {
+      databaseRetryTimer = setTimeout(() => {
+        databaseRetryTimer = null;
+        initializeDatabase();
+      }, 15_000);
+      databaseRetryTimer.unref();
+    }
+  });
+  return databaseInitializationPromise;
+}
+
 function assertStorageAvailable(operation) {
-  if (databaseConfigured && !useDb) {
+  if (!localFileStorageEnabled && !useDb) {
     throw new StorageUnavailableError(operation, databaseInitializationError);
   }
 }
@@ -1101,9 +1054,21 @@ async function handleRequest(req, res) {
 
   // ----- Health check endpoint -----
   if (req.method === "GET" && url.pathname === "/api/health") {
-    const storage = useDb ? "postgres" : databaseConfigured ? "unavailable" : "local-file";
-    const status = storage === "unavailable" ? 503 : 200;
-    return sendJson(res, status, { status: status === 200 ? "ok" : "degraded", db: storage });
+    if (useDb && pool) {
+      try {
+        await pool.query("SELECT 1");
+        return sendJson(res, 200, { status: "ok", db: "connected" });
+      } catch (error) {
+        databaseInitializationError = error;
+        console.error("PostgreSQL health check failed.", databaseErrorDetails(error));
+        return sendJson(res, 503, { status: "error", db: "unavailable" });
+      }
+    }
+
+    if (localFileStorageEnabled) {
+      return sendJson(res, 200, { status: "ok", db: "local-file" });
+    }
+    return sendJson(res, 503, { status: "error", db: "unavailable" });
   }
 
   // ----- Static assets (HTML, CSS, JS) -----
@@ -1151,7 +1116,11 @@ global.dbReady = false;
 const server = http.createServer((req, res) => {
   handleRequest(req, res).catch(err => {
     const errorId = crypto.randomBytes(6).toString("hex");
-    console.error(`Request ${errorId} failed:`, err);
+    if (err instanceof StorageUnavailableError) {
+      console.error(`Request ${errorId} failed during ${err.message}.`, databaseErrorDetails(err.cause || err));
+    } else {
+      console.error(`Request ${errorId} failed:`, err);
+    }
     if (!res.headersSent) {
       const status = err instanceof StorageUnavailableError ? 503 : 500;
       const requestUrl = new URL(req.url, "http://localhost");
@@ -1170,24 +1139,26 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`🚀 Vachana Kranti listening on http://${HOST}:${PORT}`);
-  initDb()
+  initializeDatabase()
     .then(() => {
       global.dbReady = true;
-      if (databaseConfigured && !useDb) {
-        console.warn("⚠️ Server started with database storage unavailable; edition requests will return 503.");
+      if (!localFileStorageEnabled && !useDb) {
+        console.warn("⚠️ Server started with database storage unavailable; edition requests will return 503.", {
+          reason: databaseConfig.error || databaseErrorDetails(databaseInitializationError).code
+        });
       } else {
         console.log("✅ System ready – API fully operational");
       }
     })
     .catch(err => {
-      console.warn("⚠️ Database initialization warning:", err.message);
+      console.error("⚠️ Database initialization failed.", databaseErrorDetails(err));
       global.dbReady = true;
     });
 });
 
 // Periodic scheduler
 setInterval(() => {
-  if (global.dbReady && (!databaseConfigured || useDb)) {
+  if (global.dbReady && (localFileStorageEnabled || useDb)) {
     activateDueSchedules().catch(e => console.error("Scheduler error:", e));
   }
 }, 30_000).unref();

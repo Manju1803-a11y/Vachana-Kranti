@@ -107,6 +107,12 @@ after(async () => {
 });
 
 test("public edition loading and error regressions", async (t) => {
+  await t.test("local health check reports the active development storage", async () => {
+    const response = await fetch(`${serverBaseUrl}/api/health`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { status: "ok", db: "local-file" });
+  });
+
   await t.test("published issue loads, refreshes, and serves its asset", async () => {
     const { id, image } = publishedFixture;
     const response = await fetch(`${serverBaseUrl}/api/reader/${id}`);
@@ -186,7 +192,7 @@ test("configured database outage is reported as 503, not 404", async () => {
   try {
     const health = await fetch(`${unavailable.baseUrl}/api/health`);
     assert.equal(health.status, 503);
-    assert.equal((await health.json()).db, "unavailable");
+    assert.deepEqual(await health.json(), { status: "error", db: "unavailable" });
 
     const response = await fetch(`${unavailable.baseUrl}/api/reader/123456abcdef`);
     assert.equal(response.status, 503);
@@ -197,6 +203,23 @@ test("configured database outage is reported as 503, not 404", async () => {
     assert.equal(page.status, 503);
     assert.match(page.headers.get("x-error-id"), /^[a-f0-9]{12}$/);
     assert.match(await page.text(), /id="reader-status"/);
+  } finally {
+    await stopServer(unavailable.child);
+  }
+});
+
+test("production without DATABASE_URL reports unhealthy storage", async () => {
+  const unavailable = await startServer({
+    DATABASE_URL: "",
+    NODE_ENV: "production"
+  });
+  try {
+    const health = await fetch(`${unavailable.baseUrl}/api/health`);
+    assert.equal(health.status, 503);
+    assert.deepEqual(await health.json(), { status: "error", db: "unavailable" });
+
+    const edition = await fetch(`${unavailable.baseUrl}/api/reader/123456abcdef`);
+    assert.equal(edition.status, 503);
   } finally {
     await stopServer(unavailable.child);
   }
