@@ -25,9 +25,18 @@ const REMEMBERED_SESSION_LIFETIME = 30 * 24 * 60 * 60 * 1000;
 const LOGIN_ATTEMPT_WINDOW = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 
-// Fallback admin credentials if not set in environment
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@vachanakranti.com";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@1234";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const databaseConfigured = Boolean(process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("<user>"));
+let databaseInitializationError = null;
+
+class StorageUnavailableError extends Error {
+  constructor(operation, cause) {
+    super(`Persistent storage operation failed: ${operation}`, { cause });
+    this.name = "StorageUnavailableError";
+    this.code = "STORAGE_UNAVAILABLE";
+  }
+}
 
 // Ensure local data directories exist
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -50,7 +59,7 @@ const MIME_BY_EXTENSION = {
 let useDb = false;
 let pool = null;
 
-if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("<user>")) {
+if (databaseConfigured) {
   try {
     const isLocalhost = process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("127.0.0.1");
     pool = new Pool({
@@ -58,13 +67,19 @@ if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("<user>")) {
       ssl: isLocalhost ? false : { rejectUnauthorized: false }
     });
   } catch (err) {
+    databaseInitializationError = err;
     console.warn("PostgreSQL pool setup warning:", err.message);
   }
 }
 
-// ── Database bootstrap (with automatic fallback to local files) ─────────
+// ── Database bootstrap ──────────────────────────────────────────────────
 async function initDb() {
   if (!pool) {
+    if (databaseConfigured) {
+      databaseInitializationError ||= new Error("The PostgreSQL connection pool could not be initialized.");
+      console.warn("⚠️ PostgreSQL is configured but its connection pool is unavailable.");
+      return;
+    }
     console.log("ℹ️ Running in local file storage mode (./data).");
     useDb = false;
     return;
@@ -166,22 +181,35 @@ async function initDb() {
         }
       }
     useDb = true;
+    databaseInitializationError = null;
     console.log("✅ PostgreSQL schema ready – database active.");
   } catch (err) {
     console.warn("⚠️ PostgreSQL connection failed:", err.message);
+    if (databaseConfigured) {
+      databaseInitializationError = err;
+      console.warn("➡️ Database is configured but unavailable; database-backed requests will return 503.");
+      return;
+    }
     console.warn("➡️ Falling back to local file storage.");
     useDb = false;
   }
 }
 
+function assertStorageAvailable(operation) {
+  if (databaseConfigured && !useDb) {
+    throw new StorageUnavailableError(operation, databaseInitializationError);
+  }
+}
+
 // ── Helper: app_data (categories, settings, theme, pages) ───────────────
 async function getAppData(key) {
+  assertStorageAvailable(`read ${key}`);
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(`SELECT value FROM app_data WHERE key=$1`, [key]);
       if (rows.length) return rows[0].value;
     } catch (err) {
-      console.warn("DB getAppData error:", err.message);
+      throw new StorageUnavailableError(`read ${key}`, err);
     }
   }
   const fileMap = { categories: CATEGORIES_FILE, settings: SETTINGS_FILE, theme: THEME_FILE, pages: PAGES_FILE };
@@ -193,6 +221,7 @@ async function getAppData(key) {
 }
 
 async function setAppData(key, value) {
+  assertStorageAvailable(`write ${key}`);
   if (useDb && pool) {
     try {
       await pool.query(
@@ -202,7 +231,7 @@ async function setAppData(key, value) {
       );
       return;
     } catch (err) {
-      console.warn("DB setAppData error:", err.message);
+      throw new StorageUnavailableError(`write ${key}`, err);
     }
   }
   const fileMap = { categories: CATEGORIES_FILE, settings: SETTINGS_FILE, theme: THEME_FILE, pages: PAGES_FILE };
@@ -220,12 +249,13 @@ async function getPages()      { return (await getAppData("pages"))      || []; 
 
 // ── Issue helpers ───────────────────────────────────────────────────────
 async function dbListIssues() {
+  assertStorageAvailable("list editions");
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(`SELECT id, data FROM issues ORDER BY data->>'date' DESC, data->>'createdAt' DESC`);
-      return rows.map(r => ({ id: r.id, ...r.data }));
+      return rows.map(r => ({ ...r.data, id: String(r.id).trim() }));
     } catch (err) {
-      console.warn("DB dbListIssues error:", err.message);
+      throw new StorageUnavailableError("list editions", err);
     }
   }
   if (!fs.existsSync(DATA_DIR)) return [];
@@ -237,8 +267,10 @@ async function dbListIssues() {
       if (fs.existsSync(issueFile)) {
         try {
           const data = JSON.parse(fs.readFileSync(issueFile, "utf-8"));
-          list.push({ id: ent.name, ...data });
-        } catch {}
+          list.push({ ...data, id: ent.name });
+        } catch (err) {
+          if (err.code !== "ENOENT") throw new StorageUnavailableError("read edition metadata", err);
+        }
       }
     }
   }
@@ -247,25 +279,27 @@ async function dbListIssues() {
 
 async function dbGetIssue(id) {
   if (!/^[a-f0-9]{12}$/.test(id)) return null;
+  assertStorageAvailable("read edition");
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(`SELECT id, data FROM issues WHERE id=$1`, [id]);
-      if (rows.length) return { id: rows[0].id, ...rows[0].data };
+      if (rows.length) return { ...rows[0].data, id: String(rows[0].id).trim() };
     } catch (err) {
-      console.warn("DB dbGetIssue error:", err.message);
+      throw new StorageUnavailableError("read edition", err);
     }
   }
   const issueFile = path.join(DATA_DIR, id, "issue.json");
-  if (fs.existsSync(issueFile)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(issueFile, "utf-8"));
-      return { id, ...data };
-    } catch {}
+  try {
+    const data = JSON.parse(fs.readFileSync(issueFile, "utf-8"));
+    return { ...data, id };
+  } catch (err) {
+    if (err.code === "ENOENT") return null;
+    throw new StorageUnavailableError("read edition metadata", err);
   }
-  return null;
 }
 
 async function dbSaveIssue(issue) {
+  assertStorageAvailable("save edition");
   const { id, ...data } = issue;
   if (useDb && pool) {
     try {
@@ -275,7 +309,7 @@ async function dbSaveIssue(issue) {
       );
       return;
     } catch (err) {
-      console.warn("DB dbSaveIssue error:", err.message);
+      throw new StorageUnavailableError("save edition", err);
     }
   }
   const dir = path.join(DATA_DIR, id);
@@ -284,11 +318,12 @@ async function dbSaveIssue(issue) {
 }
 
 async function dbDeleteIssue(id) {
+  assertStorageAvailable("delete edition");
   if (useDb && pool) {
     try {
       await pool.query(`DELETE FROM issues WHERE id=$1`, [id]);
     } catch (err) {
-      console.warn("DB dbDeleteIssue error:", err.message);
+      throw new StorageUnavailableError("delete edition", err);
     }
   }
   const dir = path.join(DATA_DIR, id);
@@ -296,6 +331,7 @@ async function dbDeleteIssue(id) {
 }
 
 async function dbSaveFiles(issueId, decodedFiles) {
+  assertStorageAvailable("save edition files");
   const dir = path.join(DATA_DIR, issueId);
   fs.mkdirSync(dir, { recursive: true });
   const savedMeta = [];
@@ -304,7 +340,7 @@ async function dbSaveFiles(issueId, decodedFiles) {
     try {
       await pool.query(`DELETE FROM issue_files WHERE issue_id=$1`, [issueId]);
     } catch (err) {
-      console.warn("DB delete files error:", err.message);
+      throw new StorageUnavailableError("replace edition files", err);
     }
   }
 
@@ -320,8 +356,7 @@ async function dbSaveFiles(issueId, decodedFiles) {
           [issueId, i, file.name, fileName, file.type, file.size, file.buffer]
         );
       } catch (err) {
-        console.warn("DB save file error, writing to disk:", err.message);
-        fs.writeFileSync(path.join(dir, fileName), file.buffer);
+        throw new StorageUnavailableError("save edition file", err);
       }
     } else {
       fs.writeFileSync(path.join(dir, fileName), file.buffer);
@@ -332,6 +367,7 @@ async function dbSaveFiles(issueId, decodedFiles) {
 }
 
 async function dbGetFileByPath(issueId, filePath) {
+  assertStorageAvailable("read edition file");
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(
@@ -340,7 +376,7 @@ async function dbGetFileByPath(issueId, filePath) {
       );
       if (rows.length) return rows[0];
     } catch (err) {
-      console.warn("DB get file error:", err.message);
+      throw new StorageUnavailableError("read edition file", err);
     }
   }
   const diskPath = path.join(DATA_DIR, issueId, filePath);
@@ -353,25 +389,18 @@ async function dbGetFileByPath(issueId, filePath) {
       data
     };
   }
-  // Fallback for demo page if file not found in issue_files / data dir
-  const demoFallbackPath = path.join(PUBLIC_DIR, "demo-page.jpg");
-  if (fs.existsSync(demoFallbackPath)) {
-    const data = fs.readFileSync(demoFallbackPath);
-    return {
-      type: "image/jpeg",
-      size: data.length,
-      data
-    };
-  }
   return null;
 }
 
 async function dbTotalFileSize() {
+  assertStorageAvailable("calculate storage usage");
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(`SELECT COALESCE(SUM(size),0)::bigint AS total FROM issue_files`);
       return Number(rows[0].total);
-    } catch (err) {}
+    } catch (err) {
+      throw new StorageUnavailableError("calculate storage usage", err);
+    }
   }
   let total = 0;
   if (fs.existsSync(DATA_DIR)) {
@@ -393,26 +422,19 @@ async function dbTotalFileSize() {
 // Helper to find issue by ID, alias, or slug
 async function dbFindIssue(key) {
   if (!key) return null;
-  // If user passed a slugified version of a URL like "http-localhost-3000-paper-9cec51df7a48"
-  // Extract trailing 12-char hex ID if present:
-  const trailingHexMatch = key.match(/([a-f0-9]{12})$/i);
-  const targetId = trailingHexMatch ? trailingHexMatch[1] : null;
-
-  if (targetId) {
-    const issueById = await dbGetIssue(targetId);
-    if (issueById) return issueById;
-  }
-
   if (/^[a-f0-9]{12}$/.test(key)) return dbGetIssue(key);
 
+  assertStorageAvailable("find edition");
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(`SELECT id, data FROM issues WHERE data->>'alias'=$1`, [key]);
-      if (rows.length) return { id: rows[0].id, ...rows[0].data };
-    } catch (err) {}
+      if (rows.length) return { ...rows[0].data, id: String(rows[0].id).trim() };
+    } catch (err) {
+      throw new StorageUnavailableError("find edition by alias", err);
+    }
   }
   const all = await dbListIssues();
-  return all.find(i => i.alias === key || (targetId && i.id === targetId)) || null;
+  return all.find(i => i.alias === key) || null;
 }
 
 // ── Scheduler ───────────────────────────────────────────────────────────
@@ -487,10 +509,10 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function serveFile(res, filePath, contentType) {
+function serveFile(res, filePath, contentType, status = 200, extraHeaders = {}) {
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); return res.end("Not found"); }
-    res.writeHead(200, { "Content-Type": contentType, "Cache-Control": "no-cache" });
+    res.writeHead(status, { "Content-Type": contentType, "Cache-Control": "no-cache", ...extraHeaders });
     res.end(data);
   });
 }
@@ -974,13 +996,11 @@ async function handleRequest(req, res) {
       issue = allPublic[0] || null;
     } else {
       issue = await dbFindIssue(key);
-      if (!issue && (key === "demo" || key.includes("demo"))) {
-        issue = allPublic[0] || null;
-      }
     }
 
     if (!issue || (issue.status && issue.status !== "public")) {
-      return sendJson(res, 404, { error: "Edition not found or unpublished." });
+      console.info(`Public edition lookup ${issue ? "unpublished" : "not found"}: ${key}`);
+      return sendJson(res, 404, { error: "This edition is unavailable." });
     }
 
     const idx = allPublic.findIndex(i => i.id === issue.id);
@@ -1015,15 +1035,9 @@ async function handleRequest(req, res) {
     const rawKey = paperMatch[1];
     let issue = await dbFindIssue(rawKey);
 
-    // If still not found and requesting demo, fallback to any public issue
-    if (!issue && (rawKey === "demo" || rawKey.includes("demo"))) {
-      const allPublic = (await dbListIssues()).filter(i => i.status === "public");
-      issue = allPublic[0] || null;
-    }
-
     if (!issue || (issue.status && issue.status !== "public")) {
-      res.writeHead(404);
-      return res.end("Edition not found or unpublished.");
+      console.info(`Public edition page ${issue ? "unpublished" : "not found"}: ${rawKey}`);
+      return serveFile(res, path.join(PUBLIC_DIR, "paper.html"), "text/html; charset=utf-8", 404);
     }
     const month = new Date().toISOString().slice(0, 7);
     issue.views = (issue.views || 0) + 1;
@@ -1087,7 +1101,9 @@ async function handleRequest(req, res) {
 
   // ----- Health check endpoint -----
   if (req.method === "GET" && url.pathname === "/api/health") {
-    return sendJson(res, 200, { status: "ok", db: useDb ? "postgres" : "local-file" });
+    const storage = useDb ? "postgres" : databaseConfigured ? "unavailable" : "local-file";
+    const status = storage === "unavailable" ? 503 : 200;
+    return sendJson(res, status, { status: status === 200 ? "ok" : "degraded", db: storage });
   }
 
   // ----- Static assets (HTML, CSS, JS) -----
@@ -1110,6 +1126,10 @@ async function handleRequest(req, res) {
     return serveFile(res, path.join(PUBLIC_DIR, fname), ctype);
   }
 
+  if (req.method === "GET" && url.pathname.startsWith("/paper/")) {
+    return serveFile(res, path.join(PUBLIC_DIR, "paper.html"), "text/html; charset=utf-8", 404);
+  }
+
   // Also serve any other static files from PUBLIC_DIR if they exist
   if (req.method === "GET") {
     const safePath = path.normalize(url.pathname).replace(/^(\.\.[\/\\])+/, "");
@@ -1130,8 +1150,20 @@ async function handleRequest(req, res) {
 global.dbReady = false;
 const server = http.createServer((req, res) => {
   handleRequest(req, res).catch(err => {
-    console.error("Request error:", err);
-    if (!res.headersSent) sendJson(res, 500, { error: "Server error" });
+    const errorId = crypto.randomBytes(6).toString("hex");
+    console.error(`Request ${errorId} failed:`, err);
+    if (!res.headersSent) {
+      const status = err instanceof StorageUnavailableError ? 503 : 500;
+      const requestUrl = new URL(req.url, "http://localhost");
+      if (req.method === "GET" && requestUrl.pathname.startsWith("/paper/")) {
+        return serveFile(res, path.join(PUBLIC_DIR, "paper.html"), "text/html; charset=utf-8", status, { "X-Error-ID": errorId });
+      }
+      res.setHeader("X-Error-ID", errorId);
+      return sendJson(res, status, {
+        error: status === 503 ? "Edition storage is temporarily unavailable." : "The server could not complete this request.",
+        errorId
+      });
+    }
     else res.destroy();
   });
 });
@@ -1141,7 +1173,11 @@ server.listen(PORT, HOST, () => {
   initDb()
     .then(() => {
       global.dbReady = true;
-      console.log("✅ System ready – API fully operational");
+      if (databaseConfigured && !useDb) {
+        console.warn("⚠️ Server started with database storage unavailable; edition requests will return 503.");
+      } else {
+        console.log("✅ System ready – API fully operational");
+      }
     })
     .catch(err => {
       console.warn("⚠️ Database initialization warning:", err.message);
@@ -1151,7 +1187,7 @@ server.listen(PORT, HOST, () => {
 
 // Periodic scheduler
 setInterval(() => {
-  if (global.dbReady) {
+  if (global.dbReady && (!databaseConfigured || useDb)) {
     activateDueSchedules().catch(e => console.error("Scheduler error:", e));
   }
 }, 30_000).unref();

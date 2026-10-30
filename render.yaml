@@ -9,6 +9,8 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: NODE_ENV
         value: production
-    healthCheckPath: /api/auth/session
+    healthCheckPath: /api/health

@@ -239,10 +239,25 @@ async function applyReaderSettings(issue, readerData) {
 async function loadIssue() {
   try {
     const response = await fetch(`/api/reader/${encodeURIComponent(issueKey)}`);
-    if (!response.ok) throw new Error("The edition could not be loaded.");
+    if (!response.ok) {
+      let details = {};
+      try {
+        details = await response.json();
+      } catch {
+        // Keep a useful reader error when the server does not return JSON.
+      }
+      const error = new Error(details.error || "The edition could not be loaded.");
+      error.status = response.status;
+      error.errorId = details.errorId || response.headers.get("x-error-id");
+      throw error;
+    }
     const result = await response.json();
     const issue = result.issue;
-    if (!issue) throw new Error("This e-paper issue was not found.");
+    if (!issue) {
+      const error = new Error("This edition is unavailable.");
+      error.status = 404;
+      throw error;
+    }
 
     document.title = `${issue.metaTitle || issue.name} — Vachana Kranti`;
     const description = document.createElement("meta");
@@ -280,7 +295,47 @@ async function loadIssue() {
     await applyReaderSettings(issue, result);
   } catch (error) {
     status.className = "reader-status reader-error";
-    status.textContent = error.message;
+    document.title = error.status === 404
+      ? "This edition is unavailable — Vachana Kranti"
+      : "E-paper temporarily unavailable — Vachana Kranti";
+
+    const unavailable = document.createElement("section");
+    unavailable.className = "reader-unavailable";
+    const mark = document.createElement("span");
+    mark.className = "reader-unavailable-mark";
+    mark.setAttribute("aria-hidden", "true");
+    mark.textContent = "VK";
+    const heading = document.createElement("h1");
+    heading.textContent = error.status === 404
+      ? "This edition is unavailable"
+      : "We can’t load this edition right now";
+    const message = document.createElement("p");
+    message.textContent = error.status === 404
+      ? "This ePaper may have been removed, the link may be incorrect, or the edition may not yet be published."
+      : "Please check your connection and try again. Your edition has not been changed.";
+    const actions = document.createElement("div");
+    actions.className = "reader-unavailable-actions";
+    const backLink = document.createElement("a");
+    backLink.className = "button button-light";
+    backLink.href = "/paper";
+    backLink.textContent = "Back to ePaper Home";
+    actions.append(backLink);
+    if (!error.status || error.status >= 500) {
+      const retryButton = document.createElement("button");
+      retryButton.className = "button button-primary";
+      retryButton.type = "button";
+      retryButton.textContent = "Try again";
+      retryButton.addEventListener("click", loadIssue);
+      actions.append(retryButton);
+    }
+    unavailable.append(mark, heading, message, actions);
+    if (error.errorId) {
+      const reference = document.createElement("small");
+      reference.className = "reader-error-id";
+      reference.textContent = `Reference: ${error.errorId}`;
+      unavailable.append(reference);
+    }
+    status.replaceChildren(unavailable);
   }
 }
 

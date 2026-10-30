@@ -13,7 +13,17 @@ A local Node.js publishing desk for creating and reading Vachana Kranti editions
 
 The server listens on port `3000` by default. Set the `PORT` environment variable to use a different port.
 
-The editor dashboard and management APIs require a sign-in session. Published reader pages remain public. Sessions are stored in memory and expire after eight hours, or 30 days when “Remember me” is selected; restarting the server signs users out. Admin endpoints fail closed when `ADMIN_EMAIL` or `ADMIN_PASSWORD` is not configured.
+The editor dashboard and management APIs require a sign-in session. Published reader pages remain public. Sessions are stored in memory and expire after eight hours, or 30 days when “Remember me” is selected; restarting the server signs users out. Admin endpoints fail closed when `ADMIN_EMAIL` or `ADMIN_PASSWORD` is not configured; no default admin password is shipped.
+
+## Render deployment
+
+Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `DATABASE_URL` in the Render service environment. `DATABASE_URL` must point to a PostgreSQL database containing the editions and uploaded files. The service health check is `/api/health`; it reports `postgres`, `local-file`, or `unavailable`. A configured but unreachable database returns HTTP 503 rather than silently switching stores and reporting editions as missing.
+
+Edition IDs are exactly 12 hexadecimal characters. Use the exact generated URL or the configured edition alias; malformed IDs are never truncated to match another issue. Missing and unpublished editions remain private and return HTTP 404. Storage failures return HTTP 503 and a diagnostic reference in the server log. The unavailable-edition page includes a retry action for recoverable server/network errors.
+
+Render's local filesystem is not a persistent edition store. Do not expect uploads saved in local-file mode to survive a new instance or deployment. Provision PostgreSQL and restore/import any required existing edition records and files before relying on old links. This application does not recreate or automatically publish a missing edition.
+
+Run the reader regression suite with `npm test`.
 
 ## Reader and archive
 

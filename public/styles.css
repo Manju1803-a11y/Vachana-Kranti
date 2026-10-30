@@ -651,6 +651,14 @@ input[type="color"] { height: 42px; padding: 4px 8px; cursor: pointer; }
 .reader { max-width: 900px; margin: 0 auto; padding: 32px 24px 60px; }
 .reader-status { padding: 80px 10px; color: var(--slate); text-align: center; font-size: 14px; }
 .reader-error  { color: #8B3A2A; }
+.reader-unavailable { width: min(100%, 560px); margin: 0 auto; padding: 38px 32px; border: 1px solid var(--mist); border-radius: 14px; background: var(--paper); box-shadow: 0 14px 40px rgba(24,32,47,.08); color: var(--navy); }
+.reader-unavailable-mark { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto 18px; border-radius: 14px; background: var(--navy); color: #fff; font: 700 16px "Playfair Display",Georgia,serif; }
+.reader-unavailable h1 { margin: 0; color: var(--navy); font: 700 clamp(24px, 5vw, 32px)/1.2 "Playfair Display",Georgia,serif; }
+.reader-unavailable > p { max-width: 430px; margin: 12px auto 0; color: var(--slate); font-size: 14px; line-height: 1.7; }
+.reader-unavailable-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px; }
+.reader-unavailable-actions .button { min-height: 42px; }
+.reader-unavailable-actions .button:focus-visible { outline: 3px solid #5b86d5; outline-offset: 3px; }
+.reader-error-id { display: block; margin-top: 20px; color: var(--slate); font-size: 11px; }
 .edition-masthead { padding: 24px; background: var(--paper); border: 1px solid var(--mist); border-bottom: 0; border-radius: 12px 12px 0 0; text-align: center; }
 .edition-masthead h1 { margin: 0; font: 700 clamp(24px, 5vw, 40px)/1.15 "Playfair Display",Georgia,serif; letter-spacing: -.03em; color: var(--navy); }
 .edition-meta { display: flex; justify-content: center; gap: 10px; margin-top: 10px; color: var(--slate); font-size: 12px; }
