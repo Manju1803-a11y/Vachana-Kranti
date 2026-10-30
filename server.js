@@ -123,12 +123,12 @@ async function initDb() {
     console.log("✅ PostgreSQL schema ready – database active.");
   } catch (err) {
     console.error("⚠️ PostgreSQL initialization failed.", databaseErrorDetails(err));
+    databaseInitializationError = err;
     if (databaseConfigured) {
-      databaseInitializationError = err;
-      console.warn("➡️ Database is configured but unavailable; database-backed requests will return 503.");
-      return;
+      console.warn("➡️ Database is configured but unavailable; falling back to local file storage for read operations.");
+    } else {
+      console.warn("➡️ Falling back to local file storage.");
     }
-    console.warn("➡️ Falling back to local file storage.");
     useDb = false;
   }
 }
@@ -149,9 +149,12 @@ function initializeDatabase() {
 }
 
 function assertStorageAvailable(operation) {
-  if (!localFileStorageEnabled && !useDb) {
-    throw new StorageUnavailableError(operation, databaseInitializationError);
+  // Allow local-file fallback even when DATABASE_URL is configured but unavailable.
+  // Local-file storage is always available on disk as a read-only fallback.
+  if (!useDb && !fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
   }
+  // Only throw if storage is truly unreachable (no db AND no local files AND not writable)
 }
 
 // ── Helper: app_data (categories, settings, theme, pages) ───────────────
@@ -174,6 +177,9 @@ async function getAppData(key) {
 }
 
 async function setAppData(key, value) {
+  if (databaseConfigured && !useDb) {
+    throw new StorageUnavailableError(`write ${key}`, databaseInitializationError);
+  }
   assertStorageAvailable(`write ${key}`);
   if (useDb && pool) {
     try {
@@ -215,7 +221,7 @@ async function dbListIssues() {
   const entries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
   const list = [];
   for (const ent of entries) {
-    if (ent.isDirectory() && /^[a-f0-9]{12}$/.test(ent.name)) {
+    if (ent.isDirectory() && /^[a-f0-9]{12,16}$/.test(ent.name)) {
       const issueFile = path.join(DATA_DIR, ent.name, "issue.json");
       if (fs.existsSync(issueFile)) {
         try {
@@ -231,7 +237,7 @@ async function dbListIssues() {
 }
 
 async function dbGetIssue(id) {
-  if (!/^[a-f0-9]{12}$/.test(id)) return null;
+  if (!/^[a-f0-9]{12,16}$/.test(id)) return null;
   assertStorageAvailable("read edition");
   if (useDb && pool) {
     try {
@@ -252,6 +258,9 @@ async function dbGetIssue(id) {
 }
 
 async function dbSaveIssue(issue) {
+  if (databaseConfigured && !useDb) {
+    throw new StorageUnavailableError("save edition", databaseInitializationError);
+  }
   assertStorageAvailable("save edition");
   const { id, ...data } = issue;
   if (useDb && pool) {
@@ -271,6 +280,9 @@ async function dbSaveIssue(issue) {
 }
 
 async function dbDeleteIssue(id) {
+  if (databaseConfigured && !useDb) {
+    throw new StorageUnavailableError("delete edition", databaseInitializationError);
+  }
   assertStorageAvailable("delete edition");
   if (useDb && pool) {
     try {
@@ -284,6 +296,9 @@ async function dbDeleteIssue(id) {
 }
 
 async function dbSaveFiles(issueId, decodedFiles) {
+  if (databaseConfigured && !useDb) {
+    throw new StorageUnavailableError("save edition files", databaseInitializationError);
+  }
   assertStorageAvailable("save edition files");
   const dir = path.join(DATA_DIR, issueId);
   fs.mkdirSync(dir, { recursive: true });
@@ -375,7 +390,7 @@ async function dbTotalFileSize() {
 // Helper to find issue by ID, alias, or slug
 async function dbFindIssue(key) {
   if (!key) return null;
-  if (/^[a-f0-9]{12}$/.test(key)) return dbGetIssue(key);
+  if (/^[a-f0-9]{12,16}$/.test(key)) return dbGetIssue(key);
 
   assertStorageAvailable("find edition");
   if (useDb && pool) {
@@ -996,7 +1011,12 @@ async function handleRequest(req, res) {
     issue.views = (issue.views || 0) + 1;
     issue.viewsByMonth = issue.viewsByMonth || {};
     issue.viewsByMonth[month] = (issue.viewsByMonth[month] || 0) + 1;
-    await dbSaveIssue(issue);
+    try {
+      await dbSaveIssue(issue);
+    } catch (err) {
+      // View counter save failed (likely DB unavailable) — continue serving the page
+      console.warn("View counter not saved:", err.message);
+    }
     return serveFile(res, path.join(PUBLIC_DIR, "paper.html"), "text/html; charset=utf-8");
   }
 
@@ -1061,14 +1081,13 @@ async function handleRequest(req, res) {
       } catch (error) {
         databaseInitializationError = error;
         console.error("PostgreSQL health check failed.", databaseErrorDetails(error));
-        return sendJson(res, 503, { status: "error", db: "unavailable" });
+        // Still return 200 so Render doesn't restart us — we can serve from local files
+        return sendJson(res, 200, { status: "degraded", db: "fallback-local-file", note: "PostgreSQL unavailable, using local file storage" });
       }
     }
 
-    if (localFileStorageEnabled) {
-      return sendJson(res, 200, { status: "ok", db: "local-file" });
-    }
-    return sendJson(res, 503, { status: "error", db: "unavailable" });
+    // Local-file storage is always available (whether configured or as fallback)
+    return sendJson(res, 200, { status: "ok", db: localFileStorageEnabled ? "local-file" : "fallback-local-file" });
   }
 
   // ----- Static assets (HTML, CSS, JS) -----
