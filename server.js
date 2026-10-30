@@ -789,7 +789,27 @@ async function handleRequest(req, res) {
 
   // ----- Require auth for admin UI / management APIs -----
   const admin = getAdminSession(req);
-  const adminPage = req.method === "GET" && ["/", "/index.html", "/app.js"].includes(url.pathname);
+
+  // Root URL: Public readers go straight to /paper; authenticated admin gets the admin desk
+  if (req.method === "GET" && url.pathname === "/") {
+    if (admin) {
+      return serveFile(res, path.join(PUBLIC_DIR, "index.html"), "text/html; charset=utf-8");
+    }
+    res.writeHead(302, { Location: "/paper" });
+    return res.end();
+  }
+
+  // Admin alias
+  if (req.method === "GET" && url.pathname === "/admin") {
+    if (admin) {
+      res.writeHead(302, { Location: "/" });
+      return res.end();
+    }
+    res.writeHead(302, { Location: "/login" });
+    return res.end();
+  }
+
+  const adminPage = req.method === "GET" && ["/index.html", "/app.js"].includes(url.pathname);
   const adminApi = /^\/api\/(bootstrap|dashboard|issues(?:\/.*)?|categories(?:\/.*)?|settings|theme|pages(?:\/.*)?)$/.test(url.pathname);
 
   if (!admin && (adminPage || adminApi)) {
