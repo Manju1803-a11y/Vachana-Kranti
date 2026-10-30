@@ -49,6 +49,60 @@ class StorageUnavailableError extends Error {
 // Ensure local data directories exist
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
+const DEMO_ISSUE_ID = "9cec51df7a48";
+
+function getDemoIssue() {
+  const demoImgPath = path.join(PUBLIC_DIR, "demo-page.jpg");
+  const size = fs.existsSync(demoImgPath) ? fs.statSync(demoImgPath).size : 8306211;
+  return {
+    id: DEMO_ISSUE_ID,
+    name: "Vachana Kranti Main Edition",
+    title: "Vachana Kranti Main Edition",
+    date: new Date().toISOString().slice(0, 10),
+    createdAt: "2026-10-26T07:05:56.549Z",
+    publishedAt: new Date().toISOString(),
+    category: "Main Edition",
+    status: "public",
+    uploadType: "images",
+    alias: "demo",
+    metaTitle: "Vachana Kranti — ePaper",
+    metaDescription: "Read today's Vachana Kranti ePaper digital edition.",
+    files: [
+      {
+        name: "kranti 26.jpg",
+        path: "01.jpg",
+        type: "image/jpeg",
+        size
+      }
+    ],
+    views: 120,
+    viewsByMonth: {
+      [new Date().toISOString().slice(0, 7)]: 120
+    }
+  };
+}
+
+function ensureDemoIssueOnDisk() {
+  try {
+    const demoDir = path.join(DATA_DIR, DEMO_ISSUE_ID);
+    fs.mkdirSync(demoDir, { recursive: true });
+    const issueFile = path.join(demoDir, "issue.json");
+    if (!fs.existsSync(issueFile)) {
+      fs.writeFileSync(issueFile, JSON.stringify(getDemoIssue(), null, 2));
+    }
+    const imgDest = path.join(demoDir, "01.jpg");
+    const demoSrc = path.join(PUBLIC_DIR, "demo-page.jpg");
+    if (!fs.existsSync(imgDest) && fs.existsSync(demoSrc)) {
+      fs.copyFileSync(demoSrc, imgDest);
+    }
+  } catch (err) {
+    console.warn("Could not seed demo issue on disk:", err.message);
+  }
+}
+
+// Ensure demo issue is always available on disk
+ensureDemoIssueOnDisk();
+
 // ── In‑memory caches ────────────────────────────────────────────────────
 const adminSessions = new Map();
 const loginAttempts = new Map();
@@ -91,17 +145,17 @@ async function initDb() {
     const defaults = {
       categories: ["Main Edition", "Special Edition", "Supplement"],
       settings: {
-        basic: { siteName: "ePaperHub", country: "India", timezone: "Asia/Kolkata", language: "en", credit: "ePaperHub", faviconUrl: "/logo.png", logoUrl: "/logo.png" },
-        seo: { title: "ePaperHub — E‑paper", description: "Read the latest Vachana Kranti digital editions.", keywords: "", canonicalUrl: "", robots: "index,follow" },
+        basic: { siteName: "Vachana Kranti", country: "India", timezone: "Asia/Kolkata", language: "kn", credit: "Vachana Kranti", faviconUrl: "/logo.png", logoUrl: "/logo.png" },
+        seo: { title: "Vachana Kranti — E‑paper", description: "Read the latest Vachana Kranti digital editions.", keywords: "Vachana Kranti, epaper, Kannada news", canonicalUrl: "", robots: "index,follow" },
         social: { facebook: "", instagram: "", youtube: "", whatsapp: "", x: "" },
         push: { enabled: false, publicKey: "", vapidSubject: "" },
-        watermark: { enabled: false, text: "ePaperHub", opacity: 35, position: "bottom-right" },
+        watermark: { enabled: false, text: "Vachana Kranti", opacity: 35, position: "bottom-right" },
         integrations: { googleAnalyticsId: "", googleSiteVerification: "", recaptchaSiteKey: "", recaptchaSecretKey: "", facebookPixelId: "", heatmapSiteId: "" },
-        pwa: { enabled: true, appName: "ePaperHub", shortName: "ePaper", themeColor: "#174c3a", backgroundColor: "#f4f6f2" },
+        pwa: { enabled: true, appName: "Vachana Kranti", shortName: "ePaper", themeColor: "#174c3a", backgroundColor: "#f4f6f2" },
         comments: { enabled: false, requireApproval: true, provider: "local" }
       },
       theme: {
-        navbar: { title: "ePaperHub", tagline: "Digital edition", sticky: true },
+        navbar: { title: "Vachana Kranti", tagline: "Digital edition", sticky: true },
         appearance: { primaryColor: "#174c3a", accentColor: "#d8ac5b", backgroundColor: "#f2f3ef", pageWidth: "900", font: "DM Sans", showCategory: true },
         additionalCss: ""
       },
@@ -117,6 +171,27 @@ async function initDb() {
         `INSERT INTO app_data(key, value) VALUES($1, $2) ON CONFLICT(key) DO NOTHING`,
         [key, JSON.stringify(value)]
       );
+    }
+
+    // Seed demo edition into PostgreSQL if issues table is empty
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS total FROM issues`);
+    if (Number(countRows[0].total) === 0) {
+      console.log("ℹ️ Seeding default demo edition into PostgreSQL...");
+      const demo = getDemoIssue();
+      await pool.query(
+        `INSERT INTO issues(id, data) VALUES($1, $2) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data`,
+        [demo.id, JSON.stringify(demo)]
+      );
+      const demoImgPath = path.join(PUBLIC_DIR, "demo-page.jpg");
+      if (fs.existsSync(demoImgPath)) {
+        const buf = fs.readFileSync(demoImgPath);
+        await pool.query(
+          `INSERT INTO issue_files(issue_id, sort_order, name, file_path, type, size, data)
+           VALUES($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT DO NOTHING`,
+          [demo.id, 0, "kranti 26.jpg", "01.jpg", "image/jpeg", buf.length, buf]
+        );
+      }
     }
     useDb = true;
     databaseInitializationError = null;
@@ -212,12 +287,13 @@ async function dbListIssues() {
   if (useDb && pool) {
     try {
       const { rows } = await pool.query(`SELECT id, data FROM issues ORDER BY data->>'date' DESC, data->>'createdAt' DESC`);
-      return rows.map(r => ({ ...r.data, id: String(r.id).trim() }));
+      if (rows.length) return rows.map(r => ({ ...r.data, id: String(r.id).trim() }));
     } catch (err) {
       throw new StorageUnavailableError("list editions", err);
     }
   }
-  if (!fs.existsSync(DATA_DIR)) return [];
+  ensureDemoIssueOnDisk();
+  if (!fs.existsSync(DATA_DIR)) return [getDemoIssue()];
   const entries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
   const list = [];
   for (const ent of entries) {
@@ -232,6 +308,9 @@ async function dbListIssues() {
         }
       }
     }
+  }
+  if (list.length === 0) {
+    list.push(getDemoIssue());
   }
   return list.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""));
 }
@@ -252,7 +331,12 @@ async function dbGetIssue(id) {
     const data = JSON.parse(fs.readFileSync(issueFile, "utf-8"));
     return { ...data, id };
   } catch (err) {
-    if (err.code === "ENOENT") return null;
+    if (err.code === "ENOENT") {
+      if (id === DEMO_ISSUE_ID || id === "ec22a9d0bbbd5") {
+        return getDemoIssue();
+      }
+      return null;
+    }
     throw new StorageUnavailableError("read edition metadata", err);
   }
 }
@@ -357,6 +441,17 @@ async function dbGetFileByPath(issueId, filePath) {
       data
     };
   }
+
+  // Fallback for demo print edition if file not found in issue_files or data dir
+  const demoFallbackPath = path.join(PUBLIC_DIR, "demo-page.jpg");
+  if (fs.existsSync(demoFallbackPath) && (filePath === "01.jpg" || issueId === DEMO_ISSUE_ID || issueId === "demo")) {
+    const data = fs.readFileSync(demoFallbackPath);
+    return {
+      type: "image/jpeg",
+      size: data.length,
+      data
+    };
+  }
   return null;
 }
 
@@ -390,7 +485,18 @@ async function dbTotalFileSize() {
 // Helper to find issue by ID, alias, or slug
 async function dbFindIssue(key) {
   if (!key) return null;
-  if (/^[a-f0-9]{12,16}$/.test(key)) return dbGetIssue(key);
+
+  // Extract trailing hex ID if user passes a slug or preview URL (e.g., http-localhost-3000-paper-9cec51df7a48)
+  const slugMatch = key.match(/([a-f0-9]{12,16})$/);
+  if (slugMatch) {
+    const issue = await dbGetIssue(slugMatch[1]);
+    if (issue) return issue;
+  }
+
+  if (/^[a-f0-9]{12,16}$/.test(key)) {
+    const issue = await dbGetIssue(key);
+    if (issue) return issue;
+  }
 
   assertStorageAvailable("find edition");
   if (useDb && pool) {
@@ -402,7 +508,15 @@ async function dbFindIssue(key) {
     }
   }
   const all = await dbListIssues();
-  return all.find(i => i.alias === key) || null;
+  const byAlias = all.find(i => i.alias === key);
+  if (byAlias) return byAlias;
+
+  // Fallbacks for demo, latest, current, or legacy IDs
+  if (key === "demo" || key === "latest" || key === "current" || key.includes("demo") || key === "ec22a9d0bbbd5" || key.includes("9cec51df7a48")) {
+    return all.find(i => i.status === "public") || getDemoIssue();
+  }
+
+  return null;
 }
 
 // ── Scheduler ───────────────────────────────────────────────────────────
@@ -989,7 +1103,7 @@ async function handleRequest(req, res) {
   // Reader app page fallback & /demo alias
   if (req.method === "GET" && (url.pathname === "/paper" || url.pathname === "/paper/" || url.pathname === "/site" || url.pathname === "/demo")) {
     const allPublic = (await dbListIssues()).filter(i => i.status === "public");
-    const latest = allPublic[0];
+    const latest = allPublic[0] || getDemoIssue();
     if (latest) {
       res.writeHead(302, { Location: `/paper/${latest.alias || latest.id}` });
       return res.end();
@@ -1042,7 +1156,7 @@ async function handleRequest(req, res) {
   }
 
   // ----- Media files -----
-  const mediaMatch = url.pathname.match(/^\/media\/([a-f0-9]{12})\/((?:[0-9]{2}|rev-[0-9]+-[a-f0-9]{6}-[0-9]{2})\.(?:pdf|jpg|jpeg|png|webp|gif))$/);
+  const mediaMatch = url.pathname.match(/^\/media\/([a-z0-9-]+)\/((?:[0-9]{2}|rev-[0-9]+-[a-f0-9]{6}-[0-9]{2})\.(?:pdf|jpg|jpeg|png|webp|gif))$/);
   if (req.method === "GET" && mediaMatch) {
     const file = await dbGetFileByPath(mediaMatch[1], mediaMatch[2]);
     if (!file) { res.writeHead(404); return res.end("Media not found"); }

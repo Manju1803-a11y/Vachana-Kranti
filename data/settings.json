@@ -1,17 +1,17 @@
 {
   "basic": {
-    "siteName": "ePaperHub",
+    "siteName": "Vachana Kranti",
     "country": "India",
     "timezone": "Asia/Kolkata",
-    "language": "en",
-    "credit": "ePaperHub",
+    "language": "kn",
+    "credit": "Vachana Kranti",
     "faviconUrl": "/logo.png",
     "logoUrl": "/logo.png"
   },
   "seo": {
-    "title": "ePaperHub — E-paper",
-    "description": "Read the latest digital editions.",
-    "keywords": "",
+    "title": "Vachana Kranti — E-paper",
+    "description": "Read today's Vachana Kranti digital editions.",
+    "keywords": "Vachana Kranti, epaper, Kannada news",
     "canonicalUrl": "",
     "robots": "index,follow"
   },
