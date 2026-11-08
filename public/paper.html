@@ -1,48 +1,270 @@
 <!doctype html>
-<html lang="en">
+<html lang="kn">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#174c3a">
-    <title>Vachana Kranti — E-paper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#185adb">
+    <title>ವಚನ ಕ್ರಾಂತಿ — ಇ-ಪೇಪರ್ (Vachana Kranti Epaper)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Tiro+Kannada:ital@0;1&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
     <link rel="icon" href="/logo.png">
   </head>
   <body class="paper-body">
-    <header class="topbar paper-topbar">
-      <a class="brand" href="/paper">
-        <img class="brand-logo-img" src="/logo.png" alt="Vachana Kranti" style="max-height:46px; width:auto; object-fit:contain; display:block;">
-      </a>
-      <div class="reader-actions">
-        <a class="button button-light" href="/paper">← E-paper Home</a>
-        <button class="button button-outline" id="print-button" type="button">Print edition</button>
-      </div>
-    </header>
-    <main class="reader">
-      <div class="reader-status" id="reader-status" role="status" aria-live="polite">Opening edition…</div>
-      <section id="paper-content" hidden>
-        <header class="edition-masthead">
-          <p class="eyebrow">DIGITAL EDITION</p>
-          <h1 id="paper-title"></h1>
-          <div class="edition-meta"><span id="paper-date"></span><span class="meta-separator">·</span><span id="paper-category"></span><span class="meta-separator">·</span><span id="page-count"></span></div>
-        </header>
-        <div class="reader-toolbar">
-          <div class="toolbar-label"><span class="live-dot"></span> READER VIEW</div>
-          <a class="text-action" href="#page-stack">Jump to pages ↓</a>
+    <!-- Top Header -->
+    <header class="epaper-header">
+      <div class="epaper-header-inner">
+        <a class="epaper-brand" href="/paper">
+          <img src="/logo.png" alt="ವಚನ ಕ್ರಾಂತಿ" class="brand-logo-img">
+        </a>
+        <div class="header-right">
+          <span class="user-greeting">HI, GUEST</span>
+          <a href="/login" class="btn-guest-login" title="Login to Account">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span>LOGIN</span>
+          </a>
+          <button class="menu-toggle-btn" id="menu-toggle-btn" type="button" aria-label="Toggle navigation menu" aria-expanded="false">
+            <span class="menu-bar"></span>
+            <span class="menu-bar"></span>
+            <span class="menu-bar"></span>
+          </button>
         </div>
-        <div class="page-stack" id="page-stack"></div>
-        <nav class="edition-navigation" id="edition-navigation" aria-label="Edition navigation"></nav>
-        <footer class="reader-footer"><span id="reader-credit">Vachana Kranti</span><nav id="info-pages" aria-label="Information pages"></nav></footer>
-      </section>
-    </main>
-    <div class="image-viewer" id="image-viewer" role="dialog" aria-modal="true" aria-label="Expanded newspaper page" hidden>
-      <button class="viewer-close" id="viewer-close" type="button" aria-label="Close image viewer">×</button>
-      <img id="viewer-image" alt="">
-      <p id="viewer-caption"></p>
+      </div>
+      <!-- Mobile Drawer Menu -->
+      <nav class="mobile-nav-drawer" id="mobile-nav-drawer" hidden>
+        <a href="/paper" class="mobile-nav-link active"><span>📰</span> ಇ-ಪೇಪರ್ ಮುಖಪುಟ (Home)</a>
+        <a href="/paper/demo" class="mobile-nav-link"><span>📄</span> ಇಂದಿನ ಪತ್ರಿಕೆ (Today's Paper)</a>
+        <a href="#archive" class="mobile-nav-link" id="drawer-archive-btn"><span>📅</span> ಆರ್ಕೈವ್ (Archive)</a>
+        <a href="/login" class="mobile-nav-link"><span>🔐</span> ನಿರ್ವಾಹಕ ಲಾಗಿನ್ (Admin Login)</a>
+        <a href="#info-about" class="mobile-nav-link" id="drawer-about-btn"><span>ℹ️</span> ನಮ್ಮ ಬಗ್ಗೆ (About Us)</a>
+        <a href="#info-contact" class="mobile-nav-link" id="drawer-contact-btn"><span>📞</span> ಸಂಪರ್ಕಿಸಿ (Contact)</a>
+      </nav>
+    </header>
+
+    <!-- Sticky Sub-Toolbar -->
+    <nav class="epaper-sticky-toolbar" id="epaper-sticky-toolbar" aria-label="Epaper Tools">
+      <div class="toolbar-left">
+        <div class="edition-dropdown-wrapper">
+          <select id="edition-select" class="edition-select-control" aria-label="Select Edition">
+            <option value="Main Edition" selected>Edition ▾ (Main)</option>
+            <option value="Bidar Edition">Bidar Edition</option>
+            <option value="Kalaburagi Edition">Kalaburagi Edition</option>
+            <option value="Raichur Edition">Raichur Edition</option>
+            <option value="Yadgir Edition">Yadgir Edition</option>
+          </select>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <button type="button" class="tb-btn tb-zoom" id="btn-zoom" title="Zoom in / out">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+          <span>Zoom</span>
+        </button>
+        <button type="button" class="tb-btn tb-crop" id="btn-crop" title="Crop Article / Share clipping">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
+          <span>Crop</span>
+        </button>
+        <button type="button" class="tb-btn tb-archive" id="btn-archive" title="Browse past editions">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <span>Archive</span>
+        </button>
+        <button type="button" class="tb-btn tb-dark" id="btn-dark-toggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
+          <span id="dark-mode-icon">🌙</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Date / Story Thumbnails Carousel Strip -->
+    <div class="edition-dates-carousel-wrapper" aria-label="Recent Editions">
+      <div class="edition-dates-carousel" id="edition-dates-carousel">
+        <!-- Rendered dynamically via JS with circular date previews -->
+      </div>
     </div>
+
+    <!-- Blue Masthead Banner -->
+    <div class="blue-edition-banner" id="blue-edition-banner">
+      <div class="banner-inner">
+        <svg class="banner-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8V6Z"></path></svg>
+        <span class="banner-text">
+          <strong id="banner-edition-name">Main Edition</strong> / <span id="banner-edition-date">05/11/2026</span> / Page: <strong id="banner-page-num">1</strong>
+        </span>
+      </div>
+    </div>
+
+    <!-- Reader Main Content -->
+    <main class="reader-viewport">
+      <div class="reader-status" id="reader-status" role="status" aria-live="polite">
+        <div class="reader-spinner"></div>
+        <p>Opening digital edition…</p>
+      </div>
+
+      <div class="paper-stage-wrapper" id="paper-stage-wrapper" hidden>
+        <!-- Floating Left Navigation Arrow -->
+        <button type="button" class="floating-nav-btn nav-prev" id="prev-page-btn" aria-label="Previous Page" title="Previous Page">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+
+        <!-- Pages Stack (Supports Smooth Continuous Scrolling) -->
+        <div class="paper-pages-stack" id="paper-pages-stack">
+          <!-- Stacked pages dynamically injected here -->
+        </div>
+
+        <!-- Floating Right Navigation Arrow -->
+        <button type="button" class="floating-nav-btn nav-next" id="next-page-btn" aria-label="Next Page" title="Next Page">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+    </main>
+
+    <!-- Rich Navy Footer -->
+    <footer class="epaper-rich-footer">
+      <div class="footer-card-center">
+        <div class="footer-brand-card">
+          <img src="/logo.png" alt="ವಚನ ಕ್ರಾಂತಿ" class="footer-logo-img">
+        </div>
+        <p class="footer-tagline">Read the latest Vachana Kranti Epaper</p>
+      </div>
+
+      <div class="footer-columns-grid">
+        <div class="footer-col">
+          <h3 class="footer-col-title">Important Links</h3>
+          <ul class="footer-links-list">
+            <li><a href="#" id="link-privacy">› Privacy Policy</a></li>
+            <li><a href="#" id="link-disclaimer">› Disclaimer</a></li>
+            <li><a href="#" id="link-terms">› Terms And Conditions</a></li>
+            <li><a href="#" id="link-social">🔗 Social Pages</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h3 class="footer-col-title">Lastest Edition</h3>
+          <ul class="footer-links-list" id="footer-latest-editions">
+            <li><a href="/paper/demo?date=2026-11-05" class="footer-date-link"><span class="f-cal-icon">📅</span> 05 Nov 2026</a></li>
+            <li><a href="/paper/demo?date=2026-11-03" class="footer-date-link"><span class="f-cal-icon">📅</span> 03 Nov 2026</a></li>
+            <li><a href="/paper/demo?date=2026-11-01" class="footer-date-link"><span class="f-cal-icon">📅</span> 01 Nov 2026</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom-bar">
+        <p>© 2026 ವಚನ ಕ್ರಾಂತಿ (Vachana Kranti). All rights reserved.</p>
+      </div>
+    </footer>
+
+    <!-- Bottom Sticky Pagination Strip -->
+    <div class="bottom-sticky-pagination" id="bottom-sticky-pagination" aria-label="Page numbers navigation">
+      <div class="pagination-track" id="pagination-track">
+        <!-- Rendered dynamically: [ 1 ] [ 2 ] [ 3 ] ... -->
+      </div>
+    </div>
+
+    <!-- Bottom Floating "Add this app to your home screen" Banner -->
+    <div class="pwa-install-banner" id="pwa-install-banner" role="complementary" aria-label="Install App">
+      <div class="pwa-banner-content">
+        <span class="pwa-banner-text">Add this app to your home screen for a better experience!</span>
+        <div class="pwa-banner-actions">
+          <button type="button" class="btn-pwa-install" id="btn-pwa-install">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993s-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9994.4482.9994.9993s-.4483.9997-.9994.9997m11.4045-6.02l1.996-3.4572c.1105-.1913.045-.4363-.1463-.5468-.1913-.1105-.4363-.045-.5468.1463l-2.0223 3.5028C15.5492 8.3585 13.8242 8 12 8s-3.5492.3585-5.1581.9665L4.8196 5.4637c-.1105-.1913-.3555-.2568-.5468-.1463-.1913.1105-.2568.3555-.1463.5468l1.996 3.4572C2.688 11.2327 0 15.2284 0 20h24c0-4.7716-2.688-8.7673-6.1185-10.6786"></path></svg>
+            <span>Install</span>
+          </button>
+          <button type="button" class="btn-pwa-dismiss" id="btn-pwa-dismiss">Dismiss</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zoom Modal -->
+    <div class="zoom-modal" id="zoom-modal" role="dialog" aria-modal="true" aria-label="Zoom Viewer" hidden>
+      <div class="zoom-toolbar">
+        <span class="zoom-title" id="zoom-modal-title">Page 1 - Zoom View</span>
+        <div class="zoom-controls">
+          <button type="button" class="zoom-btn" id="zoom-in-btn" title="Zoom In (+)">➕</button>
+          <button type="button" class="zoom-btn" id="zoom-out-btn" title="Zoom Out (-)">➖</button>
+          <button type="button" class="zoom-btn" id="zoom-reset-btn" title="Reset View (100%)">↺</button>
+          <button type="button" class="zoom-btn" id="zoom-download-btn" title="Download High-Res Page">⬇</button>
+          <button type="button" class="zoom-btn zoom-btn-close" id="zoom-close-btn" title="Close (Esc)" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="zoom-pan-container" id="zoom-pan-container">
+        <img id="zoom-image" alt="Newspaper Zoom" draggable="false">
+      </div>
+    </div>
+
+    <!-- Crop Modal Tool -->
+    <div class="crop-modal" id="crop-modal" role="dialog" aria-modal="true" aria-label="Crop Article" hidden>
+      <div class="crop-toolbar">
+        <div class="crop-title-group">
+          <strong>✂ Crop Article</strong>
+          <small>Drag and resize the box to select your article clipping</small>
+        </div>
+        <div class="crop-actions">
+          <button type="button" class="btn-crop-action btn-crop-download" id="crop-download-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Download Clip</span>
+          </button>
+          <button type="button" class="btn-crop-action btn-crop-share" id="crop-share-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+            <span>Share</span>
+          </button>
+          <button type="button" class="btn-crop-action btn-crop-close" id="crop-close-btn" aria-label="Close Crop Tool">✕</button>
+        </div>
+      </div>
+      <div class="crop-workspace-container" id="crop-workspace-container">
+        <div class="crop-canvas-wrapper" id="crop-canvas-wrapper">
+          <img id="crop-source-image" alt="Crop Source Image" draggable="false">
+          <div class="crop-selection-box" id="crop-selection-box">
+            <div class="crop-box-outline"></div>
+            <!-- Handles -->
+            <div class="crop-handle handle-tl" data-dir="tl"></div>
+            <div class="crop-handle handle-tr" data-dir="tr"></div>
+            <div class="crop-handle handle-bl" data-dir="bl"></div>
+            <div class="crop-handle handle-br" data-dir="br"></div>
+            <div class="crop-handle handle-t" data-dir="t"></div>
+            <div class="crop-handle handle-r" data-dir="r"></div>
+            <div class="crop-handle handle-b" data-dir="b"></div>
+            <div class="crop-handle handle-l" data-dir="l"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Archive Modal -->
+    <div class="archive-modal" id="archive-modal" role="dialog" aria-modal="true" aria-label="Archive Editions" hidden>
+      <div class="archive-modal-card">
+        <div class="archive-modal-header">
+          <h3>📅 ಆರ್ಕೈವ್ ಆವೃತ್ತಿಗಳು (Archive Editions)</h3>
+          <button type="button" class="modal-close-btn" id="archive-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="archive-modal-body">
+          <label for="archive-date-picker" class="archive-label">ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ (Select Date):</label>
+          <div class="archive-date-input-row">
+            <input type="date" id="archive-date-picker" class="archive-date-input">
+            <button type="button" class="btn-archive-go" id="archive-go-btn">ಓದಿ (Open)</button>
+          </div>
+
+          <h4 class="archive-recent-heading">ಇತ್ತೀಚಿನ ಆವೃತ್ತಿಗಳು (Recent Editions):</h4>
+          <div class="archive-recent-list" id="archive-recent-list">
+            <!-- Dynamic dates list -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info / Disclaimer Modal -->
+    <div class="info-modal" id="info-modal" role="dialog" aria-modal="true" aria-label="Information" hidden>
+      <div class="archive-modal-card">
+        <div class="archive-modal-header">
+          <h3 id="info-modal-title">Information</h3>
+          <button type="button" class="modal-close-btn" id="info-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="archive-modal-body" id="info-modal-content">
+          <!-- Dynamic info content -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas for generating crisp cropped clipping downloads -->
+    <canvas id="crop-render-canvas" style="display:none;"></canvas>
+
     <script src="/paper.js" defer></script>
   </body>
 </html>

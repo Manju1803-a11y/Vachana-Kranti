@@ -54,10 +54,16 @@ const DEMO_ISSUE_ID = "9cec51df7a48";
 function getDemoIssue() {
   const demoImgPath = path.join(PUBLIC_DIR, "demo-page.jpg");
   const size = fs.existsSync(demoImgPath) ? fs.statSync(demoImgPath).size : 8306211;
+  const pages = [1, 2, 3, 4, 5, 6, 7, 8].map(i => ({
+    name: `Page ${i}`,
+    path: `0${i}.jpg`,
+    type: "image/jpeg",
+    size
+  }));
   return {
     id: DEMO_ISSUE_ID,
-    name: "Vachana Kranti Main Edition",
-    title: "Vachana Kranti Main Edition",
+    name: "Main Edition",
+    title: "Main Edition",
     date: new Date().toISOString().slice(0, 10),
     createdAt: "2026-10-26T07:05:56.549Z",
     publishedAt: new Date().toISOString(),
@@ -65,16 +71,9 @@ function getDemoIssue() {
     status: "public",
     uploadType: "images",
     alias: "demo",
-    metaTitle: "Vachana Kranti — ePaper",
+    metaTitle: "ವಚನ ಕ್ರಾಂತಿ — ePaper",
     metaDescription: "Read today's Vachana Kranti ePaper digital edition.",
-    files: [
-      {
-        name: "kranti 26.jpg",
-        path: "01.jpg",
-        type: "image/jpeg",
-        size
-      }
-    ],
+    files: pages,
     views: 120,
     viewsByMonth: {
       [new Date().toISOString().slice(0, 7)]: 120
@@ -90,10 +89,14 @@ function ensureDemoIssueOnDisk() {
     if (!fs.existsSync(issueFile)) {
       fs.writeFileSync(issueFile, JSON.stringify(getDemoIssue(), null, 2));
     }
-    const imgDest = path.join(demoDir, "01.jpg");
     const demoSrc = path.join(PUBLIC_DIR, "demo-page.jpg");
-    if (!fs.existsSync(imgDest) && fs.existsSync(demoSrc)) {
-      fs.copyFileSync(demoSrc, imgDest);
+    if (fs.existsSync(demoSrc)) {
+      for (let i = 1; i <= 8; i++) {
+        const imgDest = path.join(demoDir, `0${i}.jpg`);
+        if (!fs.existsSync(imgDest)) {
+          fs.copyFileSync(demoSrc, imgDest);
+        }
+      }
     }
   } catch (err) {
     console.warn("Could not seed demo issue on disk:", err.message);
