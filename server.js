@@ -1280,8 +1280,13 @@ async function handleRequest(req, res) {
 
   // Reader app page fallback & /demo alias
   if ((req.method === "GET" || req.method === "HEAD") && (url.pathname === "/paper" || url.pathname === "/paper/" || url.pathname === "/site" || url.pathname === "/demo")) {
-    const allPublic = (await dbListIssues()).filter(i => i.status === "public");
-    const latest = allPublic[0] || getDemoIssue();
+    let latest = null;
+    try {
+      const allPublic = (await dbListIssues()).filter(i => i.status === "public");
+      latest = allPublic[0] || getDemoIssue();
+    } catch {
+      latest = getDemoIssue();
+    }
     if (latest) {
       res.writeHead(302, { Location: `/paper/${latest.alias || latest.id}` });
       return res.end();
@@ -1385,6 +1390,10 @@ async function handleRequest(req, res) {
 
   // ----- Health check endpoint -----
   if ((req.method === "GET" || req.method === "HEAD") && url.pathname === "/api/health") {
+    res.setHeader("X-App-Uptime", String(Math.floor(process.uptime())));
+    res.setHeader("X-App-Version", "1.0.0");
+    res.setHeader("X-App-Environment", process.env.NODE_ENV || "development");
+
     // If database mode is unavailable (e.g. production without DATABASE_URL)
     if (databaseConfig.mode === "unavailable") {
       return sendJson(res, 503, { status: "error", db: "unavailable" });
@@ -1396,9 +1405,6 @@ async function handleRequest(req, res) {
       }
       try {
         await pool.query("SELECT 1");
-        res.setHeader("X-App-Uptime", String(Math.floor(process.uptime())));
-        res.setHeader("X-App-Version", "1.0.0");
-        res.setHeader("X-App-Environment", process.env.NODE_ENV || "development");
         const payload = { status: "ok", db: "connected" };
         if (url.searchParams.get("details") === "1" || url.searchParams.get("verbose") === "1") {
           payload.uptime = Math.floor(process.uptime());
@@ -1412,9 +1418,6 @@ async function handleRequest(req, res) {
       }
     }
 
-    res.setHeader("X-App-Uptime", String(Math.floor(process.uptime())));
-    res.setHeader("X-App-Version", "1.0.0");
-    res.setHeader("X-App-Environment", process.env.NODE_ENV || "development");
     const localPayload = { status: "ok", db: localFileStorageEnabled ? "local-file" : "fallback-local-file" };
     if (url.searchParams.get("details") === "1" || url.searchParams.get("verbose") === "1") {
       localPayload.uptime = Math.floor(process.uptime());
@@ -1477,7 +1480,7 @@ const server = http.createServer((req, res) => {
     if (!res.headersSent) {
       const status = err instanceof StorageUnavailableError ? 503 : 500;
       const requestUrl = new URL(req.url, "http://localhost");
-      if (req.method === "GET" && requestUrl.pathname.startsWith("/paper/")) {
+      if (req.method === "GET" && (requestUrl.pathname === "/paper" || requestUrl.pathname.startsWith("/paper/"))) {
         return serveFile(res, path.join(PUBLIC_DIR, "paper.html"), "text/html; charset=utf-8", status, { "X-Error-ID": errorId });
       }
       res.setHeader("X-Error-ID", errorId);
