@@ -1124,7 +1124,7 @@ async function handleRequest(req, res) {
   }
 
   // Reader app page fallback & /demo alias
-  if (req.method === "GET" && (url.pathname === "/paper" || url.pathname === "/paper/" || url.pathname === "/site" || url.pathname === "/demo")) {
+  if ((req.method === "GET" || req.method === "HEAD") && (url.pathname === "/paper" || url.pathname === "/paper/" || url.pathname === "/site" || url.pathname === "/demo")) {
     const allPublic = (await dbListIssues()).filter(i => i.status === "public");
     const latest = allPublic[0] || getDemoIssue();
     if (latest) {
@@ -1136,7 +1136,7 @@ async function handleRequest(req, res) {
 
   // Reader app page for specific edition
   const paperMatch = url.pathname.match(/^\/paper\/([a-z0-9-]+)$/);
-  if (req.method === "GET" && paperMatch) {
+  if ((req.method === "GET" || req.method === "HEAD") && paperMatch) {
     const rawKey = paperMatch[1];
     let issue = await dbFindIssue(rawKey);
 
