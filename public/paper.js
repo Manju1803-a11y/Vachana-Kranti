@@ -138,9 +138,10 @@
       circleItem.title = `Read edition for ${slash}`;
       circleItem.setAttribute("aria-label", `Edition date ${slash}`);
 
+      const thumbSrc = currentIssue?.files?.[0]?.thumbnailUrl || `/media/${currentIssue?.id || "9cec51df7a48"}/thumbnail/01-120.webp`;
       circleItem.innerHTML = `
         <div class="thumb-avatar">
-          <img src="/media/9cec51df7a48/01.jpg" alt="" loading="lazy">
+          <img src="${thumbSrc}" alt="Page 1 preview" width="58" height="58" loading="lazy">
           <span class="thumb-date-badge">${slash}</span>
         </div>
       `;
@@ -313,7 +314,9 @@
 
     files.forEach((file, index) => {
       const pageIndex = index + 1;
-      const fileUrl = `/media/${issueId}/${encodeURIComponent(file.path)}`;
+      const fileUrl = file.url || `/media/${issueId}/${encodeURIComponent(file.path)}`;
+      const readingUrl = file.optimizedUrl || fileUrl;
+      const fullResUrl = file.originalUrl || fileUrl;
 
       // 1. Create Page Card in Stack
       const pageCard = document.createElement("article");
@@ -327,9 +330,9 @@
       cardHeader.innerHTML = `
         <span class="page-badge">PAGE ${pageIndex} / ${totalPages}</span>
         <span class="page-actions-inline">
-          <button type="button" class="inline-tool-btn" data-action="zoom" data-src="${fileUrl}" data-page="${pageIndex}">🔍 Zoom</button>
-          <button type="button" class="inline-tool-btn" data-action="crop" data-src="${fileUrl}" data-page="${pageIndex}">✂ Crop</button>
-          <a class="inline-tool-btn" href="${fileUrl}" download="vachana-kranti-p${pageIndex}.jpg">⬇ Download</a>
+          <button type="button" class="inline-tool-btn" data-action="zoom" data-src="${fullResUrl}" data-page="${pageIndex}">🔍 Zoom</button>
+          <button type="button" class="inline-tool-btn" data-action="crop" data-src="${fullResUrl}" data-page="${pageIndex}">✂ Crop</button>
+          <a class="inline-tool-btn" href="${fullResUrl}" download="vachana-kranti-p${pageIndex}.jpg">⬇ Download</a>
         </span>
       `;
       pageCard.appendChild(cardHeader);
@@ -340,14 +343,16 @@
 
       const pageImg = document.createElement("img");
       pageImg.className = "newspaper-page-img";
-      pageImg.src = fileUrl;
+      pageImg.src = readingUrl;
       pageImg.alt = `Vachana Kranti - Page ${pageIndex}`;
+      pageImg.width = 1400;
+      pageImg.height = 2220;
       pageImg.loading = index === 0 ? "eager" : "lazy";
       pageImg.decoding = "async";
       if (index === 0) pageImg.fetchPriority = "high";
 
-      // Click on image opens Zoom modal
-      pageImg.addEventListener("click", () => openZoomModal(fileUrl, pageIndex));
+      // Click on image opens Zoom modal with crystal-clear full-res scan
+      pageImg.addEventListener("click", () => openZoomModal(fullResUrl, pageIndex));
 
       imageWrapper.appendChild(pageImg);
       pageCard.appendChild(imageWrapper);

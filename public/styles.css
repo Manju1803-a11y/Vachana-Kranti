@@ -1412,8 +1412,13 @@ body.dark-mode .inline-tool-btn {
   position: relative;
   display: block;
   width: 100%;
-  background: #ffffff;
+  background: #f1f5f9;
   line-height: 0;
+  aspect-ratio: 1400 / 2220;
+}
+
+body.dark-mode .newspaper-image-wrapper {
+  background: #1e293b;
 }
 
 .newspaper-page-img {
@@ -1421,9 +1426,11 @@ body.dark-mode .inline-tool-btn {
   width: 100%;
   height: auto;
   max-width: 100%;
+  aspect-ratio: 1400 / 2220;
   object-fit: contain;
   cursor: zoom-in;
   filter: contrast(1.02);
+  transition: opacity 0.2s ease;
 }
 
 /* ── Rich Navy Footer (Matching Screenshot 2) ── */

@@ -10,6 +10,11 @@ const {
   retryDatabaseConnection,
   runMigrations
 } = require("./database");
+const {
+  processPageImage,
+  resolveImageVariant,
+  initIssueImageDirectories
+} = require("./imagePipeline");
 
 // ── Configuration ───────────────────────────────────────────────────────
 const PORT = Number(process.env.PORT) || 3000;
@@ -211,15 +216,20 @@ async function initDb() {
   }
 }
 
+let dbRetryAttempts = 0;
+const MAX_DB_RETRY_ATTEMPTS = 5;
+
 function initializeDatabase() {
   if (databaseInitializationPromise) return databaseInitializationPromise;
   databaseInitializationPromise = initDb().finally(() => {
     databaseInitializationPromise = null;
-    if (databaseConfigured && !useDb && !databaseRetryTimer) {
+    if (databaseConfigured && !useDb && !databaseRetryTimer && dbRetryAttempts < MAX_DB_RETRY_ATTEMPTS) {
+      dbRetryAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, dbRetryAttempts - 1), 30_000);
       databaseRetryTimer = setTimeout(() => {
         databaseRetryTimer = null;
         initializeDatabase();
-      }, 15_000);
+      }, delay);
       databaseRetryTimer.unref();
     }
   });
@@ -227,12 +237,15 @@ function initializeDatabase() {
 }
 
 function assertStorageAvailable(operation) {
-  // Allow local-file fallback even when DATABASE_URL is configured but unavailable.
-  // Local-file storage is always available on disk as a read-only fallback.
+  if (databaseConfig.mode === "unavailable") {
+    throw new StorageUnavailableError(operation, databaseInitializationError || new Error(databaseConfig.error || "Storage unavailable"));
+  }
+  if (databaseConfigured && !useDb) {
+    throw new StorageUnavailableError(operation, databaseInitializationError || new Error("PostgreSQL is configured but unavailable"));
+  }
   if (!useDb && !fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
-  // Only throw if storage is truly unreachable (no db AND no local files AND not writable)
 }
 
 // ── Helper: app_data (categories, settings, theme, pages) ───────────────
@@ -415,6 +428,9 @@ async function dbSaveFiles(issueId, decodedFiles) {
       }
     } else {
       fs.writeFileSync(path.join(dir, fileName), file.buffer);
+      processPageImage(file.buffer, dir, fileName).catch(err => {
+        console.warn(`Variant generation for ${fileName} failed:`, err.message);
+      });
     }
     savedMeta.push({ name: file.name, path: fileName, type: file.type, size: file.size });
   }
@@ -447,7 +463,9 @@ async function dbGetFileByPath(issueId, filePath) {
 
   // Fallback for demo print edition if file not found in issue_files or data dir
   const demoFallbackPath = path.join(PUBLIC_DIR, "demo-page.jpg");
-  if (fs.existsSync(demoFallbackPath) && (filePath === "01.jpg" || issueId === DEMO_ISSUE_ID || issueId === "demo")) {
+  const isDemoIssue = issueId === DEMO_ISSUE_ID || issueId === "demo";
+  const isDemoFile = isDemoIssue && /^0[1-8]\.(jpg|jpeg)$/i.test(filePath);
+  if (fs.existsSync(demoFallbackPath) && (filePath === "01.jpg" || isDemoFile)) {
     const data = fs.readFileSync(demoFallbackPath);
     return {
       type: "image/jpeg",
@@ -595,11 +613,141 @@ function sendJson(res, status, payload) {
 }
 
 function serveFile(res, filePath, contentType, status = 200, extraHeaders = {}) {
-  fs.readFile(filePath, (err, data) => {
-    if (err) { res.writeHead(404); return res.end("Not found"); }
-    res.writeHead(status, { "Content-Type": contentType, "Cache-Control": "no-cache", ...extraHeaders });
-    res.end(data);
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(ROOT))) {
+    res.writeHead(403);
+    return res.end("Forbidden");
+  }
+
+  fs.stat(resolved, (err, stats) => {
+    if (err || !stats.isFile()) {
+      res.writeHead(404);
+      return res.end("Not found");
+    }
+    res.writeHead(status, {
+      "Content-Type": contentType,
+      "Content-Length": stats.size,
+      "Cache-Control": extraHeaders["Cache-Control"] || "no-cache",
+      "X-Content-Type-Options": "nosniff",
+      ...extraHeaders
+    });
+    const stream = fs.createReadStream(resolved);
+    stream.on("error", () => {
+      if (!res.headersSent) res.writeHead(500);
+      res.destroy();
+    });
+    stream.pipe(res);
   });
+}
+
+function streamFile(req, res, filePath, contentType, extraHeaders = {}) {
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(ROOT))) {
+    res.writeHead(403);
+    return res.end("Forbidden");
+  }
+
+  fs.stat(resolved, (err, stats) => {
+    if (err || !stats.isFile()) {
+      res.writeHead(404);
+      return res.end("Not found");
+    }
+
+    const etag = `W/"${stats.size.toString(16)}-${stats.mtimeMs.toString(16)}"`;
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304);
+      return res.end();
+    }
+
+    const size = stats.size;
+    let start = 0;
+    let end = size - 1;
+    let status = 200;
+
+    const range = req.headers.range;
+    if (range) {
+      const match = range.match(/^bytes=(\d*)-(\d*)$/);
+      if (match) {
+        if (match[1]) start = Number(match[1]);
+        if (match[2]) end = Math.min(Number(match[2]), size - 1);
+        if (start > end) {
+          res.writeHead(416, { "Content-Range": `bytes */${size}` });
+          return res.end();
+        }
+        status = 206;
+      }
+    }
+
+    const headers = {
+      "Content-Type": contentType,
+      "Accept-Ranges": "bytes",
+      "Content-Length": end - start + 1,
+      "ETag": etag,
+      "Cache-Control": extraHeaders["Cache-Control"] || "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+      ...extraHeaders
+    };
+
+    if (status === 206) {
+      headers["Content-Range"] = `bytes ${start}-${end}/${size}`;
+    }
+
+    res.writeHead(status, headers);
+    if (req.method === "HEAD") {
+      return res.end();
+    }
+
+    const stream = fs.createReadStream(resolved, { start, end });
+    stream.on("error", () => {
+      if (!res.headersSent) res.writeHead(500);
+      res.destroy();
+    });
+    req.on("close", () => {
+      stream.destroy();
+    });
+    stream.pipe(res);
+  });
+}
+
+function streamBuffer(req, res, buffer, contentType, extraHeaders = {}) {
+  const size = buffer.length;
+  let start = 0;
+  let end = size - 1;
+  let status = 200;
+
+  const range = req.headers.range;
+  if (range) {
+    const match = range.match(/^bytes=(\d*)-(\d*)$/);
+    if (match) {
+      if (match[1]) start = Number(match[1]);
+      if (match[2]) end = Math.min(Number(match[2]), size - 1);
+      if (start > end) {
+        res.writeHead(416, { "Content-Range": `bytes */${size}` });
+        return res.end();
+      }
+      status = 206;
+    }
+  }
+
+  const headers = {
+    "Content-Type": contentType,
+    "Accept-Ranges": "bytes",
+    "Content-Length": end - start + 1,
+    "Cache-Control": extraHeaders["Cache-Control"] || "public, max-age=31536000, immutable",
+    "X-Content-Type-Options": "nosniff",
+    ...extraHeaders
+  };
+
+  if (status === 206) {
+    headers["Content-Range"] = `bytes ${start}-${end}/${size}`;
+  }
+
+  res.writeHead(status, headers);
+  if (req.method === "HEAD") {
+    return res.end();
+  }
+
+  res.end(buffer.slice(start, end + 1));
 }
 
 function readJson(req) {
@@ -701,13 +849,20 @@ function publicIssue(issue, baseUrl) {
     alias,
     featured: Boolean(issue.featured),
     totalFiles: issue.files ? issue.files.length : 0,
-    files: (issue.files || []).map(f => ({
-      name: f.name,
-      path: f.path,
-      type: f.type,
-      size: f.size,
-      url: `${baseUrl}/media/${issue.id}/${f.path}`
-    })),
+    files: (issue.files || []).map(f => {
+      const base = f.path.replace(/\.[^.]+$/, "");
+      return {
+        name: f.name,
+        path: f.path,
+        type: f.type,
+        size: f.size,
+        url: `${baseUrl}/media/${issue.id}/${f.path}`,
+        optimizedUrl: `${baseUrl}/media/${issue.id}/optimized/${base}.webp`,
+        thumbnailUrl: `${baseUrl}/media/${issue.id}/thumbnail/${base}-120.webp`,
+        thumbnailSmallUrl: `${baseUrl}/media/${issue.id}/thumb-60/${base}-60.webp`,
+        originalUrl: `${baseUrl}/media/${issue.id}/${f.path}`
+      };
+    }),
     areas: issue.areas || [],
     url: readerUrl,
     readerUrl
@@ -1178,53 +1333,95 @@ async function handleRequest(req, res) {
     return res.end("Upload not found");
   }
 
-  // ----- Media files -----
-  const mediaMatch = url.pathname.match(/^\/media\/([a-z0-9-]+)\/((?:[0-9]{2}|rev-[0-9]+-[a-f0-9]{6}-[0-9]{2})\.(?:pdf|jpg|jpeg|png|webp|gif))$/);
-  if (req.method === "GET" && mediaMatch) {
-    const file = await dbGetFileByPath(mediaMatch[1], mediaMatch[2]);
-    if (!file) { res.writeHead(404); return res.end("Media not found"); }
+  // ----- Media files & Variant streaming -----
+  const mediaMatch = url.pathname.match(/^\/media\/([a-z0-9-]+)\/(?:(optimized|thumbnail|thumbnails|thumb-120|thumb-60|original)\/)?((?:[0-9]{2}|rev-[0-9]+-[a-f0-9]{6}-[0-9]{2}|[a-zA-Z0-9_.-]+)\.(?:pdf|jpg|jpeg|png|webp|gif))$/);
+  if ((req.method === "GET" || req.method === "HEAD") && mediaMatch) {
+    const issueId = mediaMatch[1];
+    const variant = mediaMatch[2] || "original";
+    const filename = mediaMatch[3];
 
-    const size = file.data.length;
-    let start = 0, end = size - 1, status = 200;
-    const range = req.headers.range;
-    if (range) {
-      const m = range.match(/^bytes=(\d*)-(\d*)$/);
-      if (m) {
-        if (m[1]) start = Number(m[1]);
-        if (m[2]) end = Math.min(Number(m[2]), size - 1);
-        if (start > end) { res.writeHead(416, { "Content-Range": `bytes */${size}` }); return res.end(); }
-        status = 206;
+    // 1. If database mode is active and stores files in DB
+    if (useDb && pool) {
+      const file = await dbGetFileByPath(issueId, filename);
+      if (file && file.data) {
+        return streamBuffer(req, res, file.data, file.type);
       }
     }
-    const headers = {
-      "Content-Type": file.type,
-      "Accept-Ranges": "bytes",
-      "Content-Length": end - start + 1,
-      "Cache-Control": "public, max-age=31536000, immutable",
-      "X-Content-Type-Options": "nosniff"
-    };
-    if (status === 206) headers["Content-Range"] = `bytes ${start}-${end}/${size}`;
-    res.writeHead(status, headers);
-    res.end(file.data.slice(start, end + 1));
-    return;
+
+    // 2. Resolve on disk via imagePipeline
+    const issueDir = path.join(DATA_DIR, issueId);
+    const parsed = path.parse(filename);
+    const baseName = parsed.name.replace(/-(120|60)$/, "");
+    const isDemoIssue = (issueId === DEMO_ISSUE_ID || issueId === "demo");
+    const isDemoPage = isDemoIssue && /^0[1-8]$/.test(baseName);
+
+    // Only allow fallback to demo-page.jpg if this is genuinely a valid demo page
+    let fallbackOriginal = null;
+    if (isDemoPage && fs.existsSync(path.join(PUBLIC_DIR, "demo-page.jpg"))) {
+      fallbackOriginal = path.join(PUBLIC_DIR, "demo-page.jpg");
+    }
+
+    // Try resolving variant (or generating on demand)
+    const resolved = await resolveImageVariant(issueDir, variant, filename, fallbackOriginal);
+    if (resolved) {
+      return streamFile(req, res, resolved.diskPath, resolved.mime);
+    }
+
+    // Check if legacy direct file exists in issueDir
+    const legacyPath = path.join(issueDir, filename);
+    if (fs.existsSync(legacyPath)) {
+      const ext = path.extname(filename).toLowerCase();
+      return streamFile(req, res, legacyPath, MIME_BY_EXTENSION[ext] || "application/octet-stream");
+    }
+
+    // Check fallback demo page for demo issue
+    if (isDemoPage && fallbackOriginal && (filename === "01.jpg" || variant === "original")) {
+      return streamFile(req, res, fallbackOriginal, "image/jpeg");
+    }
+
+    res.writeHead(404);
+    return res.end("Media not found");
   }
 
   // ----- Health check endpoint -----
-  if (req.method === "GET" && url.pathname === "/api/health") {
-    if (useDb && pool) {
+  if ((req.method === "GET" || req.method === "HEAD") && url.pathname === "/api/health") {
+    // If database mode is unavailable (e.g. production without DATABASE_URL)
+    if (databaseConfig.mode === "unavailable") {
+      return sendJson(res, 503, { status: "error", db: "unavailable" });
+    }
+
+    if (databaseConfigured) {
+      if (!useDb || !pool) {
+        return sendJson(res, 503, { status: "error", db: "unavailable" });
+      }
       try {
         await pool.query("SELECT 1");
-        return sendJson(res, 200, { status: "ok", db: "connected" });
+        res.setHeader("X-App-Uptime", String(Math.floor(process.uptime())));
+        res.setHeader("X-App-Version", "1.0.0");
+        res.setHeader("X-App-Environment", process.env.NODE_ENV || "development");
+        const payload = { status: "ok", db: "connected" };
+        if (url.searchParams.get("details") === "1" || url.searchParams.get("verbose") === "1") {
+          payload.uptime = Math.floor(process.uptime());
+          payload.version = "1.0.0";
+          payload.environment = process.env.NODE_ENV || "development";
+        }
+        return sendJson(res, 200, payload);
       } catch (error) {
         databaseInitializationError = error;
-        console.error("PostgreSQL health check failed.", databaseErrorDetails(error));
-        // Still return 200 so Render doesn't restart us — we can serve from local files
-        return sendJson(res, 200, { status: "degraded", db: "fallback-local-file", note: "PostgreSQL unavailable, using local file storage" });
+        return sendJson(res, 503, { status: "error", db: "unavailable" });
       }
     }
 
-    // Local-file storage is always available (whether configured or as fallback)
-    return sendJson(res, 200, { status: "ok", db: localFileStorageEnabled ? "local-file" : "fallback-local-file" });
+    res.setHeader("X-App-Uptime", String(Math.floor(process.uptime())));
+    res.setHeader("X-App-Version", "1.0.0");
+    res.setHeader("X-App-Environment", process.env.NODE_ENV || "development");
+    const localPayload = { status: "ok", db: localFileStorageEnabled ? "local-file" : "fallback-local-file" };
+    if (url.searchParams.get("details") === "1" || url.searchParams.get("verbose") === "1") {
+      localPayload.uptime = Math.floor(process.uptime());
+      localPayload.version = "1.0.0";
+      localPayload.environment = process.env.NODE_ENV || "development";
+    }
+    return sendJson(res, 200, localPayload);
   }
 
   // ----- Static assets (HTML, CSS, JS) -----
@@ -1318,3 +1515,28 @@ setInterval(() => {
     activateDueSchedules().catch(e => console.error("Scheduler error:", e));
   }
 }, 30_000).unref();
+
+// Graceful shutdown handling
+function handleShutdown(signal) {
+  console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
+  server.close(async () => {
+    console.log("HTTP server closed.");
+    if (pool) {
+      try {
+        await pool.end();
+        console.log("Database connection pool drained.");
+      } catch (err) {
+        console.error("Error draining database pool:", err.message);
+      }
+    }
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.error("Graceful shutdown timed out. Forcing exit.");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+process.on("SIGINT", () => handleShutdown("SIGINT"));
