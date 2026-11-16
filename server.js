@@ -17,9 +17,24 @@ const {
 } = require("./imagePipeline");
 
 // ── Configuration ───────────────────────────────────────────────────────
+const ROOT = __dirname;
+if (process.env.ADMIN_EMAIL === undefined || process.env.ADMIN_PASSWORD === undefined) {
+  const envPath = path.join(ROOT, ".env");
+  if (fs.existsSync(envPath)) {
+    try {
+      const parsed = require("dotenv").parse(fs.readFileSync(envPath));
+      if (process.env.ADMIN_EMAIL === undefined && parsed.ADMIN_EMAIL) {
+        process.env.ADMIN_EMAIL = parsed.ADMIN_EMAIL;
+      }
+      if (process.env.ADMIN_PASSWORD === undefined && parsed.ADMIN_PASSWORD) {
+        process.env.ADMIN_PASSWORD = parsed.ADMIN_PASSWORD;
+      }
+    } catch {}
+  }
+}
+
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
-const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data", "issues");
 const CATEGORIES_FILE = path.join(ROOT, "data", "categories.json");
@@ -36,8 +51,20 @@ const REMEMBERED_SESSION_LIFETIME = 30 * 24 * 60 * 60 * 1000;
 const LOGIN_ATTEMPT_WINDOW = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+function getAdminEmail() {
+  return (process.env.ADMIN_EMAIL || "").trim();
+}
+
+function getAdminPassword() {
+  return process.env.ADMIN_PASSWORD || "";
+}
+
+function isAdminConfigured() {
+  return Boolean(getAdminEmail() && getAdminPassword());
+}
+
+const ADMIN_EMAIL = getAdminEmail();
+const ADMIN_PASSWORD = getAdminPassword();
 const databaseConfig = getDatabaseConfig();
 const databaseConfigured = databaseConfig.mode === "postgres";
 const localFileStorageEnabled = databaseConfig.mode === "local-file";
@@ -813,6 +840,9 @@ function getCookieSecurity(req) {
 }
 
 function passwordsMatch(provided, expected) {
+  if (typeof provided !== "string" || typeof expected !== "string" || !provided || !expected) {
+    return false;
+  }
   const a = crypto.createHash("sha256").update(provided).digest();
   const b = crypto.createHash("sha256").update(expected).digest();
   return crypto.timingSafeEqual(a, b);
@@ -897,7 +927,7 @@ async function handleRequest(req, res) {
   if (req.method === "GET" && url.pathname === "/api/auth/session") {
     return sendJson(res, 200, {
       authenticated: Boolean(getAdminSession(req)),
-      configured: Boolean(ADMIN_EMAIL && ADMIN_PASSWORD)
+      configured: isAdminConfigured()
     });
   }
 
@@ -905,7 +935,9 @@ async function handleRequest(req, res) {
     if (!isSameOrigin(req)) {
       return sendJson(res, 403, { error: "Login must originate from this site." });
     }
-    if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    const adminEmail = getAdminEmail();
+    const adminPassword = getAdminPassword();
+    if (!adminEmail || !adminPassword) {
       return sendJson(res, 503, { error: "Admin credentials not configured." });
     }
 
@@ -920,8 +952,8 @@ async function handleRequest(req, res) {
     const body = await readJson(req);
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const pw = typeof body.password === "string" ? body.password : "";
-    const okEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-    const okPw = passwordsMatch(pw, ADMIN_PASSWORD);
+    const okEmail = email.toLowerCase() === adminEmail.toLowerCase();
+    const okPw = passwordsMatch(pw, adminPassword);
 
     if (!okEmail || !okPw) {
       const next = attempt && attempt.expiresAt > now ? { count: attempt.count + 1, expiresAt: attempt.expiresAt } : { count: 1, expiresAt: now + LOGIN_ATTEMPT_WINDOW };
@@ -1495,6 +1527,11 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`🚀 Vachana Kranti listening on http://${HOST}:${PORT}`);
+  if (isAdminConfigured()) {
+    console.log("🔒 Administrator authentication: active and configured.");
+  } else {
+    console.warn("⚠️ Administrator authentication: NOT configured. Set ADMIN_EMAIL and ADMIN_PASSWORD in server environment.");
+  }
   initializeDatabase()
     .then(() => {
       global.dbReady = true;
