@@ -1,3 +1,9 @@
+databases:
+  - name: vachana-kranti-db
+    databaseName: vachanakranti
+    user: vachanakranti_user
+    plan: free
+
 services:
   - type: web
     name: vachana-kranti
@@ -10,7 +16,9 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: vachana-kranti-db
+          property: connectionString
       - key: NODE_ENV
         value: production
     healthCheckPath: /api/health

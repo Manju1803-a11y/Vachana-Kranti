@@ -235,6 +235,14 @@ async function initDb() {
     console.error("⚠️ PostgreSQL initialization failed.", databaseErrorDetails(err));
     databaseInitializationError = err;
     if (databaseConfigured) {
+      if (process.env.NODE_ENV === "production" && databaseConfig.connectionString) {
+        try {
+          const parsedUrl = new URL(databaseConfig.connectionString);
+          if (["localhost", "127.0.0.1", "::1"].includes(parsedUrl.hostname)) {
+            console.error("❌ DATABASE_URL points to localhost in production. Cloud containers (such as Render) cannot reach local databases. Please configure the Internal Database URL from your Render PostgreSQL instance.");
+          }
+        } catch {}
+      }
       console.warn("➡️ Database is configured but unavailable; falling back to local file storage for read operations.");
     } else {
       console.warn("➡️ Falling back to local file storage.");
