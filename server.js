@@ -53,7 +53,7 @@ const MAX_LOGIN_ATTEMPTS = 5;
 
 function getAdminEmail() {
   const email = (process.env.ADMIN_EMAIL || "").trim();
-  return email.replace(/^["']|["']$/g, "");
+  return email.replace(/^["']|["']$/g, "").trim();
 }
 
 function getAdminPassword() {

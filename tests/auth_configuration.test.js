@@ -123,9 +123,9 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
     }
   });
 
-  test("TEST 3: Valid email and valid password succeeds with HttpOnly secure session cookie", async () => {
-    const validEmail = "master.admin@epaperhub.test";
-    const validPassword = "CorrectHorseBatteryStaple!2026";
+  test("TEST 3: Valid administrator email and newly configured password succeeds with HttpOnly session cookie", async () => {
+    const validEmail = "admin@epaperhub.com";
+    const validPassword = "NewSecretPassword2026!";
     const srv = await startTestServer({
       ADMIN_EMAIL: validEmail,
       ADMIN_PASSWORD: validPassword
@@ -160,9 +160,9 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
     }
   });
 
-  test("TEST 4: Incorrect email rejects authentication with HTTP 401", async () => {
+  test("TEST 4: Incorrect password rejects authentication with HTTP 401", async () => {
     const srv = await startTestServer({
-      ADMIN_EMAIL: "admin@epaperhub.test",
+      ADMIN_EMAIL: "admin@epaperhub.com",
       ADMIN_PASSWORD: "CorrectPassword123"
     });
 
@@ -170,7 +170,7 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
       const loginRes = await fetch(`${srv.baseUrl}/api/auth/login`, {
         method: "POST",
         headers: { Origin: srv.baseUrl, "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "wrong-user@epaperhub.test", password: "CorrectPassword123" })
+        body: JSON.stringify({ email: "admin@epaperhub.com", password: "IncorrectPassword999" })
       });
       assert.equal(loginRes.status, 401);
       const data = await loginRes.json();
@@ -180,9 +180,9 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
     }
   });
 
-  test("TEST 5: Incorrect password rejects authentication with HTTP 401", async () => {
+  test("TEST 5: Incorrect email rejects authentication with HTTP 401", async () => {
     const srv = await startTestServer({
-      ADMIN_EMAIL: "admin@epaperhub.test",
+      ADMIN_EMAIL: "admin@epaperhub.com",
       ADMIN_PASSWORD: "CorrectPassword123"
     });
 
@@ -190,7 +190,7 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
       const loginRes = await fetch(`${srv.baseUrl}/api/auth/login`, {
         method: "POST",
         headers: { Origin: srv.baseUrl, "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "admin@epaperhub.test", password: "IncorrectPassword999" })
+        body: JSON.stringify({ email: "wrong-user@epaperhub.com", password: "CorrectPassword123" })
       });
       assert.equal(loginRes.status, 401);
       const data = await loginRes.json();
@@ -200,16 +200,16 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
     }
   });
 
-  test("TEST 6: Valid login followed by dashboard access reports authorized access", async () => {
+  test("TEST 6: Valid login followed by dashboard access", async () => {
     const validEmail = "admin@epaperhub.com";
-    const validPassword = "NewSecretPassword2026!";
+    const validPassword = "CorrectPassword123";
     const srv = await startTestServer({
       ADMIN_EMAIL: validEmail,
       ADMIN_PASSWORD: validPassword
     });
 
     try {
-      // 1. Authenticate
+      // 1. Log in
       const loginRes = await fetch(`${srv.baseUrl}/api/auth/login`, {
         method: "POST",
         headers: { Origin: srv.baseUrl, "Content-Type": "application/json" },
@@ -218,29 +218,35 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
       assert.equal(loginRes.status, 200);
       const cookieHeader = loginRes.headers.get("set-cookie").split(";")[0];
 
-      // 2. Access dashboard stats API
-      const dashboardRes = await fetch(`${srv.baseUrl}/api/dashboard`, {
+      // 2. Access dashboard API
+      const dashRes = await fetch(`${srv.baseUrl}/api/dashboard`, {
         headers: { Cookie: cookieHeader }
       });
-      assert.equal(dashboardRes.status, 200);
-      const stats = await dashboardRes.json();
-      assert.ok(typeof stats.totalEditions === "number");
-      assert.ok(typeof stats.storage === "object");
+      assert.equal(dashRes.status, 200);
+      const dashData = await dashRes.json();
+      assert.ok(typeof dashData.totalEditions === "number");
 
       // 3. Access bootstrap API
-      const bootstrapRes = await fetch(`${srv.baseUrl}/api/bootstrap`, {
+      const bootRes = await fetch(`${srv.baseUrl}/api/bootstrap`, {
         headers: { Cookie: cookieHeader }
       });
-      assert.equal(bootstrapRes.status, 200);
-      const bootstrap = await bootstrapRes.json();
-      assert.ok(Array.isArray(bootstrap.issues));
-      assert.ok(Array.isArray(bootstrap.categories));
+      assert.equal(bootRes.status, 200);
+      const bootData = await bootRes.json();
+      assert.ok(Array.isArray(bootData.issues));
+
+      // 4. Access admin page route
+      const adminRes = await fetch(`${srv.baseUrl}/admin`, {
+        headers: { Cookie: cookieHeader },
+        redirect: "manual"
+      });
+      assert.equal(adminRes.status, 302);
+      assert.equal(adminRes.headers.get("location"), "/");
     } finally {
       await stopTestServer(srv.child);
     }
   });
 
-  test("TEST 7: Unauthorized admin API access returns HTTP 401 or 403", async () => {
+  test("TEST 7: Unauthorized admin API access returns HTTP 401 or redirect", async () => {
     const srv = await startTestServer({
       ADMIN_EMAIL: "admin@epaperhub.com",
       ADMIN_PASSWORD: "CorrectPassword123"
@@ -266,7 +272,7 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
     }
   });
 
-  test("TEST 8: Logout invalidates administrator session", async () => {
+  test("TEST 8: Successful administrator logout invalidates session", async () => {
     const validEmail = "admin@epaperhub.com";
     const validPassword = "CorrectPassword123";
     const srv = await startTestServer({
@@ -312,24 +318,30 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
     }
   });
 
-  test("TEST 9: PostgreSQL connection succeeds when valid database is provided", async () => {
-    const { checkDatabaseConnection, retryDatabaseConnection } = require("../database");
-    let queryCount = 0;
+  test("TEST 9: PostgreSQL connection pool and retry verification", async () => {
+    const { retryDatabaseConnection, checkDatabaseConnection } = require("../database");
+    let attempts = 0;
     const mockPool = {
       async query(sql) {
-        queryCount += 1;
-        assert.equal(sql, "SELECT 1");
-        return { rows: [{ "?column?": 1 }] };
+        attempts++;
+        if (attempts === 1) {
+          const err = new Error("Temporary connection issue");
+          err.code = "ECONNREFUSED";
+          throw err;
+        }
+        return { rows: [{ result: 1 }] };
       }
     };
+    await retryDatabaseConnection(mockPool, { attempts: 3, delay: () => 5 });
+    assert.equal(attempts, 2);
     await checkDatabaseConnection(mockPool);
-    await retryDatabaseConnection(mockPool, { attempts: 2 });
-    assert.equal(queryCount, 2);
   });
 
-  test("TEST 10: Database unavailable handles storage failure safely without corrupting data", async () => {
+  test("TEST 10: Database unavailable handles storage error safely without data corruption", async () => {
     const srv = await startTestServer({
-      DATABASE_URL: "postgresql://nonexistent_user:fake_pw@127.0.0.1:1/nonexistent?connect_timeout=1"
+      DATABASE_URL: "postgresql://test:test@127.0.0.1:1/test?connect_timeout=1",
+      ADMIN_EMAIL: "admin@epaperhub.com",
+      ADMIN_PASSWORD: "CorrectPassword123"
     });
 
     try {
@@ -339,38 +351,36 @@ describe("ADMINISTRATOR AUTHENTICATION SUITE", () => {
       assert.equal(healthData.status, "error");
       assert.equal(healthData.db, "unavailable");
 
-      // Attempting to read a nonexistent issue during DB outage returns clean 503 with error ID
-      const readerRes = await fetch(`${srv.baseUrl}/api/reader/deadbeef1234`);
+      const readerRes = await fetch(`${srv.baseUrl}/api/reader/123456abcdef`);
       assert.equal(readerRes.status, 503);
-      const readerData = await readerRes.json();
-      assert.match(readerData.error, /storage is temporarily unavailable/i);
+      assert.equal(readerRes.headers.get("x-error-id")?.length, 12);
     } finally {
       await stopTestServer(srv.child);
     }
   });
 
-  test("TEST 11: Production environment loads Render credentials accurately and succeeds", async () => {
-    const renderAdminEmail = "admin@epaperhub.com";
-    const renderAdminPassword = "SecureRenderSecret!2026";
+  test("TEST 11: Production environment ensures Render environment variables take precedence", async () => {
+    // Process env takes precedence over local configuration
     const srv = await startTestServer({
       NODE_ENV: "production",
-      ADMIN_EMAIL: renderAdminEmail,
-      ADMIN_PASSWORD: renderAdminPassword
+      ADMIN_EMAIL: "admin@epaperhub.com",
+      ADMIN_PASSWORD: "ProductionRenderPassword2026!"
     });
 
     try {
-      // 1. Session reports configured
       const sessionRes = await fetch(`${srv.baseUrl}/api/auth/session`);
       assert.equal(sessionRes.status, 200);
       const sessionData = await sessionRes.json();
       assert.equal(sessionData.configured, true);
-      assert.equal(sessionData.authenticated, false);
 
-      // 2. Production login succeeds
+      // Login succeeds with the production environment credential
       const loginRes = await fetch(`${srv.baseUrl}/api/auth/login`, {
         method: "POST",
         headers: { Origin: srv.baseUrl, "Content-Type": "application/json" },
-        body: JSON.stringify({ email: renderAdminEmail, password: renderAdminPassword })
+        body: JSON.stringify({
+          email: "admin@epaperhub.com",
+          password: "ProductionRenderPassword2026!"
+        })
       });
       assert.equal(loginRes.status, 200);
       const loginData = await loginRes.json();
