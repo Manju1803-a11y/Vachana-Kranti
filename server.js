@@ -52,11 +52,13 @@ const LOGIN_ATTEMPT_WINDOW = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 
 function getAdminEmail() {
-  return (process.env.ADMIN_EMAIL || "").trim();
+  const email = (process.env.ADMIN_EMAIL || "").trim();
+  return email.replace(/^["']|["']$/g, "");
 }
 
 function getAdminPassword() {
-  return process.env.ADMIN_PASSWORD || "";
+  const password = process.env.ADMIN_PASSWORD || "";
+  return password.replace(/^["']|["']$/g, "");
 }
 
 function isAdminConfigured() {
